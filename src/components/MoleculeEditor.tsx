@@ -116,7 +116,7 @@ export function MoleculeEditor() {
     const observer = new ResizeObserver(() => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
-        bridgeRef.current?.composer.resized?.();
+        bridgeRef.current?.handleResize();
       });
     });
 

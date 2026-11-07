@@ -47,6 +47,8 @@ src/index.css               Tailwind entry + Kekule dark-shell overrides
 - Kekule is loaded from a locally vendored copy of the official npm `dist` bundle (`kekule.min.js` 1.0.4), not a live CDN, so the editor works offline and the version is pinned.
 - The Kekule 1.0.4 editor renders through its **Canvas2D** bridge by default (it can also use Raphael/SVG, but that is not the default editor path). To keep lines smooth we enable the renderer's `antialias` flag and a 2× `overSamplingRatio`, and set `bondLineWidth` to 1.5.
 - Native Kekule chrome is removed in two layers: empty tool button arrays on the composer, and CSS that hides the top/left/bottom regions and advanced panel.
+- On startup and after clearing, the viewport is centered on the drawing surface, and the surface is grown to cover the viewport so panning works in every direction instead of being stuck at an edge. Window resizes keep the current scroll position.
+- The drawing surface tracks 2.5× the viewport (minimum 2400 rendered px, capped at 3600 rendered px per side so the three canvas layers stay within a sane memory budget). It is re-evaluated on zoom and always kept large enough to contain the drawn structure.
 - The composer's `change` events drive the React empty-canvas hint; no DOM outside the host is managed by Kekule.
 
 ## Keyboard shortcuts

@@ -43,6 +43,7 @@ export interface MoleculeEditorBridge {
   zoomOut(): void;
   resetZoom(): void;
   loadFile(file: File): Promise<boolean>;
+  handleResize(): void;
   destroy(): void;
 }
 
@@ -104,7 +105,17 @@ function fitToView(K: KekuleNamespace, composer: any) {
   const targetZoom = Math.max(0.45, Math.min(currentZoom * factor, 2.6));
 
   editor.zoomTo?.(targetZoom);
-  editor.scrollClientToObject?.(molecules, { scrollToCenter: true, coverMostObjs: true });
+  rebalanceBoard(K, composer, { preserveViewCenter: false });
+
+  // Kekule finishes its own layout (and may reset the scroll) right after a
+  // zoom or a document load, so center the content a few times.
+  const centerOnMolecules = () => {
+    editor.scrollClientToObject?.(molecules, { scrollToCenter: true, coverMostObjs: true });
+  };
+  centerOnMolecules();
+  window.requestAnimationFrame(centerOnMolecules);
+  window.setTimeout(centerOnMolecules, 80);
+
   return true;
 }
 
@@ -128,10 +139,167 @@ function centerContentInSpace(K: KekuleNamespace, composer: any) {
   );
 }
 
+function getEditorScroller(editor: any): HTMLElement | undefined {
+  return editor?.getEditClientElem?.()?.parentNode ?? undefined;
+}
+
+/**
+ * Center the viewport on the drawing surface. Starting at a corner leaves the
+ * scroll at a boundary, so panning away from that edge does nothing.
+ */
+function centerEditorView(editor: any) {
+  const scroller = getEditorScroller(editor);
+  if (!scroller) return;
+
+  const left = Math.max(0, Math.round((scroller.scrollWidth - scroller.clientWidth) / 2));
+  const top = Math.max(0, Math.round((scroller.scrollHeight - scroller.clientHeight) / 2));
+
+  if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
+  if (scroller.scrollTop !== top) scroller.scrollTop = top;
+}
+
+/**
+ * Target size of the drawing surface. Kekule sizes its canvas layers as
+ * `screenSize * zoom`, so the surface is expressed in rendered pixels and then
+ * converted back with the current zoom; this keeps both the panning room and
+ * the canvas memory bounded at every zoom level.
+ */
+const BOARD_SPAN_FACTOR = 2.5;
+const BOARD_TARGET_MIN_PX = 2400;
+const BOARD_TARGET_MAX_PX = 3000;
+/** Rendered pixels per side the canvas may reach; Kekule keeps 3 canvas layers. */
+const BOARD_MAX_CANVAS_PX = 3600;
+/** Chemical-space margin (in rendered px) that must stay free around the content. */
+const BOARD_CONTENT_MARGIN_PX = 80;
+
+function getBoardTarget(editor: any, scroller: HTMLElement) {
+  const zoom = editor.getCurrZoom?.() || 1;
+  const viewportX = scroller.clientWidth / zoom;
+  const viewportY = scroller.clientHeight / zoom;
+
+  const targetWidth = Math.min(
+    Math.max(scroller.clientWidth * BOARD_SPAN_FACTOR, BOARD_TARGET_MIN_PX),
+    BOARD_TARGET_MAX_PX,
+  );
+  const targetHeight = Math.min(
+    Math.max(scroller.clientHeight * BOARD_SPAN_FACTOR, BOARD_TARGET_MIN_PX),
+    BOARD_TARGET_MAX_PX,
+  );
+
+  return {
+    zoom,
+    viewportX,
+    viewportY,
+    desiredX: Math.max(targetWidth / zoom, viewportX),
+    desiredY: Math.max(targetHeight / zoom, viewportY),
+  };
+}
+
+/** Smallest surface (in screen px) that still contains the drawn content. */
+function getContentMinScreenSize(K: KekuleNamespace, composer: any, zoom: number) {
+  const box = getUnionBox(K, getMolecules(K, composer));
+  const ratio = composer.getEditor?.()?.getChemSpace?.()?.getObjScreenLengthRatio?.() || 0;
+  if (!box || !ratio) return null;
+
+  const margin = (BOARD_CONTENT_MARGIN_PX / zoom) * ratio;
+  const widthObj = Math.max(box.x2 - box.x1 + margin * 2, box.x2 + margin);
+  const heightObj = Math.max(box.y2 - box.y1 + margin * 2, box.y2 + margin);
+
+  return {
+    x: widthObj / ratio,
+    y: heightObj / ratio,
+  };
+}
+
+/**
+ * Keep the drawing surface sized for the current zoom: big enough to pan and
+ * draw around the viewport, never smaller than the content, and bounded so the
+ * canvas layers do not explode in memory at high zoom levels.
+ */
+function rebalanceBoard(
+  K: KekuleNamespace,
+  composer: any,
+  options: { preserveViewCenter?: boolean } = {},
+) {
+  const preserveViewCenter = options.preserveViewCenter ?? true;
+  const editor = composer.getEditor?.();
+  const space = editor?.getChemSpace?.();
+  const scroller = getEditorScroller(editor);
+  if (!space || !scroller) return;
+
+  const current = space.getScreenSize?.();
+  if (!current || !current.x || !current.y) return;
+
+  const target = getBoardTarget(editor, scroller);
+  const contentMin = getContentMinScreenSize(K, composer, target.zoom);
+  const contentX = contentMin?.x ?? 0;
+  const contentY = contentMin?.y ?? 0;
+
+  const floorX = Math.max(target.viewportX, contentX);
+  const floorY = Math.max(target.viewportY, contentY);
+  const ceilX = Math.max(BOARD_MAX_CANVAS_PX / target.zoom, floorX);
+  const ceilY = Math.max(BOARD_MAX_CANVAS_PX / target.zoom, floorY);
+
+  const nextX = Math.min(Math.max(target.desiredX, contentX, floorX), ceilX);
+  const nextY = Math.min(Math.max(target.desiredY, contentY, floorY), ceilY);
+
+  if (Math.abs(nextX - current.x) < 1 && Math.abs(nextY - current.y) < 1) return;
+
+  // Resizing the surface changes the scroll range, so remember what the center
+  // of the viewport points at and restore it afterwards.
+  const viewCenter = preserveViewCenter
+    ? editor.screenCoordToObj?.({
+        x: scroller.scrollLeft + scroller.clientWidth / 2,
+        y: scroller.scrollTop + scroller.clientHeight / 2,
+      })
+    : null;
+
+  editor.changeChemSpaceScreenSize?.({
+    x: Math.max(1, Math.round(nextX)),
+    y: Math.max(1, Math.round(nextY)),
+  });
+
+  if (viewCenter) {
+    // Kekule resets the scroll position asynchronously after a size change,
+    // so keep re-applying until its own layout pass has finished.
+    const restoreViewCenter = () => {
+      const screenCoord = editor.objCoordToScreen?.(viewCenter);
+      if (!screenCoord) return;
+
+      const left = Math.max(0, Math.round(screenCoord.x - scroller.clientWidth / 2));
+      const top = Math.max(0, Math.round(screenCoord.y - scroller.clientHeight / 2));
+
+      if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
+      if (scroller.scrollTop !== top) scroller.scrollTop = top;
+    };
+
+    restoreViewCenter();
+    window.requestAnimationFrame(restoreViewCenter);
+    window.setTimeout(restoreViewCenter, 80);
+  }
+}
+
+function centerEmptyView(K: KekuleNamespace, composer: any) {
+  const editor = composer.getEditor?.();
+  if (!editor) return;
+
+  const apply = () => {
+    rebalanceBoard(K, composer);
+    centerEditorView(editor);
+  };
+
+  window.requestAnimationFrame(() => {
+    apply();
+    window.setTimeout(apply, 80);
+    window.setTimeout(apply, 320);
+  });
+}
+
 function refitAfterLoad(K: KekuleNamespace, composer: any) {
   const centerAndFit = () => {
     centerContentInSpace(K, composer);
     fitToView(K, composer);
+    rebalanceBoard(K, composer);
   };
 
   window.requestAnimationFrame(() => {
@@ -513,6 +681,24 @@ export function createEditorBridge(
     clear() {
       composer.newDoc?.();
       repaint();
+      centerEmptyView(K, composer);
+    },
+    handleResize() {
+      const scroller = getEditorScroller(editor);
+      const previousScroll = scroller
+        ? { left: scroller.scrollLeft, top: scroller.scrollTop }
+        : null;
+
+      composer.resized?.();
+      rebalanceBoard(K, composer);
+
+      // Kekule snaps the scroll position back to the origin while resizing.
+      if (scroller && previousScroll) {
+        window.requestAnimationFrame(() => {
+          scroller.scrollLeft = previousScroll.left;
+          scroller.scrollTop = previousScroll.top;
+        });
+      }
     },
     undo() {
       composer.undo?.();
@@ -524,14 +710,17 @@ export function createEditorBridge(
     },
     zoomIn() {
       editor.zoomIn?.();
+      rebalanceBoard(K, composer);
     },
     zoomOut() {
       editor.zoomOut?.();
+      rebalanceBoard(K, composer);
     },
     resetZoom() {
       if (!fitToView(K, composer)) {
         editor.resetZoom?.();
       }
+      rebalanceBoard(K, composer);
     },
     async loadFile(file) {
       const extension = file.name.split('.').pop()?.toLowerCase();
@@ -608,8 +797,10 @@ export function createEditorBridge(
     composer.resized?.();
     applyTool(K, composer, 'single');
     repaint();
+    centerEmptyView(K, composer);
     callbacks.onContentChange?.(hasContent());
   });
 
   return bridge;
 }
+
