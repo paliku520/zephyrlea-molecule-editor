@@ -35,6 +35,9 @@ npm run preview
 - Element-coloured atom labels: N blue, O red, S yellow, P orange, halogens green/violet, sharing one palette with the element strip; the carbon skeleton stays neutral and hover/selection markers use the theme accent.
 - Bond stroke width and multiple-bond spacing scale with the bond length, so lines stay visible when zoomed in.
 - Double bonds are styled per context: inside a ring the second line is drawn on the ring side and shortened to 72%, so it never merges with the neighbouring bond or overshoots a vertex; outside rings the original look is kept, with two equal-length parallel lines spanning both atoms.
+- Select and Lasso are two distinct tools: **Select** marquees with a rectangle (a plain click picks a single atom or bond, Shift appends), **Lasso** draws a free-hand polygon. Both share `SelectIaController` and only differ in `SelectMode` (`RECT` / `POLYGON`).
+- A floating action bar appears above the selection with the object count plus rotate −15° / +15°, flip horizontally, flip vertically and delete.
+- The selection box deliberately **cannot be stretched or scaled from its handles** (that would distort bond lengths and angles): only dragging to move and the rotation region outside the box stay active, and pinch-scaling of a selection is disabled too. Use the top-bar zoom buttons to change the view scale.
 
 ## Project layout
 

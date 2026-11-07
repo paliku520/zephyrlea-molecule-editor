@@ -36,11 +36,11 @@ interface ToolDefinition {
 const TOOL_GROUPS: ToolDefinition[][] = [
   [
     { tool: 'select', label: '选择', icon: <MousePointer2 size={18} strokeWidth={1.7} /> },
+    { tool: 'lasso', label: '套索选择', icon: <Lasso size={18} strokeWidth={1.6} /> },
     { tool: 'pan', label: '平移画布', icon: <Hand size={18} strokeWidth={1.6} /> },
   ],
   [
     { tool: 'erase', label: '橡皮擦', icon: <Eraser size={18} strokeWidth={1.6} /> },
-    { tool: 'lasso', label: '套索选择', icon: <Lasso size={18} strokeWidth={1.6} /> },
   ],
   [
     { tool: 'single', label: '单键', icon: <SingleBondIcon width={19} height={19} /> },

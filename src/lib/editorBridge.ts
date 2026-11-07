@@ -32,6 +32,19 @@ export type ToolId =
 
 export interface EditorBridgeCallbacks {
   onContentChange?: (hasContent: boolean) => void;
+  onSelectionChange?: (selection: SelectionSnapshot | null) => void;
+}
+
+/** Selection state used by the floating transform bar. */
+export interface SelectionSnapshot {
+  /** Total number of selected objects (atoms + bonds). */
+  count: number;
+  atomCount: number;
+  bondCount: number;
+  /** Selection bounds in viewport pixels. */
+  box: { left: number; top: number; width: number; height: number };
+  /** False when the selection holds fewer than two atoms and cannot be transformed. */
+  transformable: boolean;
 }
 
 export interface MoleculeEditorBridge {
@@ -50,6 +63,10 @@ export interface MoleculeEditorBridge {
   resetZoom(): void;
   loadFile(file: File): Promise<boolean>;
   handleResize(): void;
+  readSelection(): SelectionSnapshot | null;
+  rotateSelection(angle: number): boolean;
+  mirrorSelection(axis: 'horizontal' | 'vertical'): boolean;
+  deleteSelection(): boolean;
   destroy(): void;
 }
 
@@ -573,6 +590,190 @@ function activateElementTool(K: KekuleNamespace, editor: any, symbol: string) {
   return true;
 }
 
+/**
+ * Select and lasso share one controller; only the select mode differs.
+ * Rectangle marquee for the pointer tool, free-hand polygon for the lasso.
+ */
+function activateSelectTool(editor: any, mode: any) {
+  const controller = editor.getIaController?.('SelectIaController');
+
+  // Stretching the selection box (edge/corner handles) distorts bond lengths,
+  // so resize and pinch-scaling stay off; move and rotate remain available.
+  controller?.setEnableResize?.(false);
+  controller?.setEnableAspectRatioLockedResize?.(false);
+  controller?.setEnableGestureManipulation?.(false);
+  controller?.setEnableMove?.(true);
+  controller?.setEnableRotate?.(true);
+
+  editor.setSelectMode?.(mode);
+  controller?.setSelectMode?.(mode);
+  editor.setActiveIaControllerId?.('SelectIaController');
+  return true;
+}
+
+function isAtomObject(obj: any) {
+  return typeof obj?.getAtomicNumber === 'function';
+}
+
+function isBondObject(obj: any) {
+  return typeof obj?.getBondOrder === 'function';
+}
+
+/**
+ * Atoms that actually move when the selection is transformed. Molecules and
+ * fragments contribute their nodes, a lone bond contributes its endpoints
+ * (bonds borrow their coordinates from atoms in 2D).
+ */
+function collectSelectionAtoms(selection: any[]) {
+  const atoms = new Set<any>();
+
+  const addNode = (node: any) => {
+    if (isAtomObject(node)) atoms.add(node);
+  };
+
+  for (const obj of selection) {
+    if (!obj) continue;
+
+    if (typeof obj.getNodes === 'function') {
+      (obj.getNodes() ?? []).forEach(addNode);
+      continue;
+    }
+
+    if (isAtomObject(obj)) {
+      addNode(obj);
+      continue;
+    }
+
+    const nodes = obj.getConnectedExposedNodes?.() ?? obj.getConnectedNodes?.() ?? [];
+    nodes.forEach(addNode);
+  }
+
+  return [...atoms];
+}
+
+/**
+ * Rotates or mirrors the selected atoms around the selection centre. Scaling is
+ * deliberately unsupported: it would distort bond lengths and valence geometry.
+ */
+function transformSelection(
+  K: KekuleNamespace,
+  editor: any,
+  options: { rotate?: number; mirror?: 'horizontal' | 'vertical' },
+): boolean {
+  const atoms = collectSelectionAtoms(editor.getSelection?.() ?? []);
+  if (atoms.length < 2) return false;
+
+  const angle = options.rotate ?? 0;
+  const mirrorX = options.mirror === 'vertical' ? -1 : 1;
+  const mirrorY = options.mirror === 'horizontal' ? -1 : 1;
+
+  const coords = atoms.map((atom) => {
+    const coord = atom.getCoord2D?.();
+    return { x: coord?.x ?? 0, y: coord?.y ?? 0 };
+  });
+
+  const xs = coords.map((coord) => coord.x);
+  const ys = coords.map((coord) => coord.y);
+  const center = {
+    x: (Math.min(...xs) + Math.max(...xs)) / 2,
+    y: (Math.min(...ys) + Math.max(...ys)) / 2,
+  };
+
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const nextCoords = coords.map((coord) => {
+    const dx = (coord.x - center.x) * mirrorX;
+    const dy = (coord.y - center.y) * mirrorY;
+
+    return {
+      x: center.x + dx * cos - dy * sin,
+      y: center.y + dx * sin + dy * cos,
+    };
+  });
+
+  const operations = atoms.map(
+    (atom, index) => new K.ChemObjOperation.Modify(atom, { coord2D: nextCoords[index] }, editor),
+  );
+
+  editor.execOperation?.(new K.MacroOperation(operations));
+  return true;
+}
+
+const CLICK_SELECT_TOLERANCE_PX = 4;
+
+/**
+ * Kekule's select controller only listens to marquee drags, so a plain click
+ * never selects a single atom or bond. Add that pointer behaviour while the
+ * select/lasso tool is active.
+ */
+function installClickSelection(editor: any) {
+  const host: HTMLElement | undefined = editor.getEditClientElem?.();
+  if (!host) return () => {};
+
+  let startClient: { x: number; y: number } | null = null;
+
+  const onPointerDown = (event: PointerEvent) => {
+    startClient = { x: event.clientX, y: event.clientY };
+  };
+
+  const onPointerUp = (event: PointerEvent) => {
+    if (!startClient) return;
+
+    const distance = Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y);
+    startClient = null;
+
+    if (distance > CLICK_SELECT_TOLERANCE_PX) return;
+    if (editor.getActiveIaControllerId?.() !== 'SelectIaController') return;
+
+    const coord = editor.getEventMouseRelCoord?.(event);
+    if (!coord) return;
+
+    const obj = editor.getTopmostBasicObjectAtCoord?.(coord, editor.getCurrBoundInflation?.());
+    if (!obj) return;
+
+    if (event.shiftKey) {
+      editor.toggleSelectingState?.(obj);
+    } else {
+      editor.deselectAll?.();
+      editor.addObjToSelection?.(obj);
+    }
+
+    editor.recalcSelectionAreaMarker?.();
+  };
+
+  host.addEventListener('pointerdown', onPointerDown, true);
+  host.addEventListener('pointerup', onPointerUp, true);
+
+  return () => {
+    host.removeEventListener('pointerdown', onPointerDown, true);
+    host.removeEventListener('pointerup', onPointerUp, true);
+  };
+}
+
+function createSelectionSnapshot(editor: any): SelectionSnapshot | null {
+  const selection: any[] = editor.getSelection?.() ?? [];
+  if (selection.length === 0) return null;
+
+  const box = editor.getSelectionContainerBox?.();
+  const host = editor.getEditClientElem?.();
+  if (!box || !host) return null;
+
+  const rect = host.getBoundingClientRect();
+
+  return {
+    count: selection.length,
+    atomCount: selection.filter(isAtomObject).length,
+    bondCount: selection.filter(isBondObject).length,
+    box: {
+      left: rect.left + box.x1,
+      top: rect.top + box.y1,
+      width: Math.max(box.x2 - box.x1, 0),
+      height: Math.max(box.y2 - box.y1, 0),
+    },
+    transformable: collectSelectionAtoms(selection).length >= 2,
+  };
+}
+
 function applyTool(K: KekuleNamespace, composer: any, tool: ToolId): boolean {
   const editor = composer.getEditor?.();
   if (!editor) return false;
@@ -583,20 +784,15 @@ function applyTool(K: KekuleNamespace, composer: any, tool: ToolId): boolean {
 
   switch (tool) {
     case 'select':
-      editor.setActiveIaControllerId?.('SelectIaController');
-      return true;
+      return activateSelectTool(editor, K.Editor.SelectMode.RECT);
     case 'pan':
       editor.setActiveIaControllerId?.('ClientDragScrollIaController');
       return true;
     case 'erase':
       editor.setActiveIaControllerId?.('BasicMolEraserIaController');
       return true;
-    case 'lasso': {
-      const controller = editor.getIaController?.('SelectIaController');
-      controller?.setSelectMode?.(K.Editor.SelectMode.POLYGON);
-      editor.setActiveIaControllerId?.('SelectIaController');
-      return true;
-    }
+    case 'lasso':
+      return activateSelectTool(editor, K.Editor.SelectMode.POLYGON);
     case 'chargePlus':
     case 'chargeMinus': {
       const controller = editor.getIaController?.('MolNodeChargeIaController');
@@ -697,8 +893,23 @@ export function createEditorBridge(
     });
   };
 
+  const notifySelectionChange = () => {
+    if (destroyed) return;
+    callbacks.onSelectionChange?.(createSelectionSnapshot(editor));
+  };
+
+  const finishSelectionTransform = () => {
+    editor.recalcSelectionAreaMarker?.();
+    repaint();
+    notifyContentChange();
+    notifySelectionChange();
+  };
+
+  const disposeClickSelection = installClickSelection(editor);
+
   editor.addEventListener?.('change', notifyContentChange);
   editor.addEventListener?.('editObjChanged', notifyContentChange);
+  editor.addEventListener?.('selectionChange', notifySelectionChange);
 
   const bridge: MoleculeEditorBridge = {
     composer,
@@ -837,6 +1048,32 @@ export function createEditorBridge(
       repaint();
       board.centerEmptyView();
     },
+    readSelection() {
+      return createSelectionSnapshot(editor);
+    },
+    rotateSelection(angle) {
+      if (!Number.isFinite(angle) || angle === 0) return false;
+      const applied = transformSelection(K, editor, { rotate: angle });
+      if (applied) finishSelectionTransform();
+      return applied;
+    },
+    mirrorSelection(axis) {
+      const applied = transformSelection(K, editor, { mirror: axis });
+      if (applied) finishSelectionTransform();
+      return applied;
+    },
+    deleteSelection() {
+      if (!editor.hasSelection?.()) return false;
+
+      // deleteSelectedObjs() is a no-op on the base editor; the eraser
+      // controller owns the real removal operation.
+      const eraser = editor.getIaController?.('BasicMolEraserIaController');
+      if (!eraser?.removeSelection) return false;
+
+      eraser.removeSelection();
+      finishSelectionTransform();
+      return true;
+    },
     handleResize() {
       const scroller = getEditorScroller(editor);
       const previousScroll = scroller
@@ -931,9 +1168,11 @@ export function createEditorBridge(
     },
     destroy() {
       destroyed = true;
+      disposeClickSelection();
       board.dispose();
       editor.removeEventListener?.('change', notifyContentChange);
       editor.removeEventListener?.('editObjChanged', notifyContentChange);
+      editor.removeEventListener?.('selectionChange', notifySelectionChange);
       try {
         composer.finalize?.();
       } catch (error) {

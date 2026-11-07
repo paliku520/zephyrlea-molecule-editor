@@ -3,10 +3,12 @@ import { AlertTriangle, Check, Info, Search, X } from 'lucide-react';
 import { TopBar } from './TopBar';
 import { LeftToolRail } from './LeftToolRail';
 import { ElementStrip } from './ElementStrip';
+import { SelectionToolbar } from './SelectionToolbar';
 import { waitForKekule } from '../lib/kekule';
 import {
   createEditorBridge,
   type MoleculeEditorBridge,
+  type SelectionSnapshot,
   type ToolId,
 } from '../lib/editorBridge';
 
@@ -39,6 +41,7 @@ export function MoleculeEditor() {
   const [smilesInput, setSmilesInput] = useState('');
   const [activeTool, setActiveTool] = useState<ToolId>('single');
   const [hasContent, setHasContent] = useState(false);
+  const [selection, setSelection] = useState<SelectionSnapshot | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const showToast = useCallback((next: ToastState | null, duration = 5200) => {
@@ -80,6 +83,7 @@ export function MoleculeEditor() {
 
         bridge = createEditorBridge(K, hostRef.current, {
           onContentChange: (nextHasContent) => setHasContent(nextHasContent),
+          onSelectionChange: setSelection,
         });
 
         bridgeRef.current = bridge;
@@ -101,6 +105,7 @@ export function MoleculeEditor() {
     return () => {
       cancelled = true;
       bridgeRef.current = null;
+      setSelection(null);
       bridge?.destroy();
       if (window.__zephyrleaEditor === bridge) {
         delete window.__zephyrleaEditor;
@@ -302,6 +307,8 @@ export function MoleculeEditor() {
 
           <main className="dot-grid relative min-h-0 flex-1 overflow-hidden">
             <div ref={hostRef} className="kekule-host absolute inset-0" />
+
+            {ready && <SelectionToolbar bridge={bridgeRef.current} selection={selection} />}
 
             {!ready && !initError && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
