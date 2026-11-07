@@ -1,7 +1,9 @@
 import type { EditorBoard } from './editorBoard';
 import { createEditorBoard } from './editorBoard';
+import { ATOMIC_NUMBER_LIMIT, DEFAULT_ELEMENT_COLOR, ELEMENT_COLORS } from './elementColors';
 import type { KekuleNamespace } from './kekule';
 import { installBondLineStyle } from './kekuleBondStyle';
+import { installLabelBaseline } from './kekuleLabelStyle';
 import { getEditorScroller, getMolecules, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
 
@@ -170,10 +172,34 @@ function getCentroid(nodes: any[]) {
   return { x: x / nodes.length, y: y / nodes.length };
 }
 
+/**
+ * Kekule ships a CPK palette meant for white paper (black carbon, navy
+ * nitrogen). Replace it with the shell palette so heteroatom labels stay
+ * readable on the dark canvas while carbons keep the neutral atom color.
+ */
+function installAtomPalette(K: KekuleNamespace) {
+  const rendererType = K.Render.RendererType?.R2D;
+  const colorSets = K.Render.atomColors;
+  if (rendererType === undefined || !colorSets) return;
+
+  const palette: string[] = new Array(ATOMIC_NUMBER_LIMIT).fill(DEFAULT_ELEMENT_COLOR);
+
+  for (const [symbol, color] of Object.entries(ELEMENT_COLORS)) {
+    const atomicNumber = new K.Atom(null, symbol).getAtomicNumber?.();
+    if (typeof atomicNumber === 'number' && atomicNumber > 0 && atomicNumber < ATOMIC_NUMBER_LIMIT) {
+      palette[atomicNumber] = color;
+    }
+  }
+
+  colorSets[rendererType] = palette;
+}
+
 function applyDarkRenderTheme(K: KekuleNamespace) {
+  installAtomPalette(K);
+
   const renderConfigs = K.Render.getRender2DConfigs();
   const colorConfigs = renderConfigs.getColorConfigs();
-  colorConfigs.setUseAtomSpecifiedColor(false);
+  colorConfigs.setUseAtomSpecifiedColor(true);
   colorConfigs.setAtomColor(ATOM_COLOR);
   colorConfigs.setLabelColor(ATOM_COLOR);
   colorConfigs.setBondColor(BOND_COLOR);
@@ -183,6 +209,30 @@ function applyDarkRenderTheme(K: KekuleNamespace) {
   const lengthConfigs = renderConfigs.getLengthConfigs();
   lengthConfigs.setBondLineWidth?.(1.5);
   lengthConfigs.setBoldBondLineWidthRatio?.(2);
+}
+
+/** Kekule marks hovered/selected objects in pure blue; follow the shell accent. */
+function applyUiMarkerTheme(composer: any) {
+  const markers = composer.getEditorConfigs?.()?.getUiMarkerConfigs?.();
+  if (!markers) return;
+
+  const accent = getThemeAccent();
+  markers.setHotTrackerColor?.(accent);
+  markers.setHotTrackerOpacity?.(0.3);
+  markers.setSelectionMarkerStrokeColor?.(accent);
+  markers.setSelectionMarkerFillColor?.(accent);
+  markers.setSelectionMarkerOpacity?.(0.2);
+}
+
+function getThemeAccent() {
+  const fallback = '#89b5fa';
+  if (typeof window === 'undefined') return fallback;
+
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-accent')
+    .trim();
+
+  return value || fallback;
 }
 
 function activateBondTool(
@@ -318,6 +368,7 @@ export function createEditorBridge(
 ): MoleculeEditorBridge {
   applyDarkRenderTheme(K);
   installBondLineStyle(K);
+  installLabelBaseline(K);
 
   let destroyed = false;
   const composer = new K.Editor.Composer(host);
@@ -337,6 +388,8 @@ export function createEditorBridge(
   environment2D?.setAntialias?.(true);
   environment2D?.setAntialiasBlurRatio?.(0.18);
   environment2D?.setOverSamplingRatio?.(2);
+
+  applyUiMarkerTheme(composer);
 
   const editor = composer.getEditor();
   const board = createEditorBoard(K, composer);

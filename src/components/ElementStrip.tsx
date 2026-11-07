@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { ToolId } from '../lib/editorBridge';
+import { DEFAULT_ELEMENT_COLOR, ELEMENT_COLORS } from '../lib/elementColors';
 
 interface ElementStripProps {
   ready: boolean;
@@ -9,17 +10,17 @@ interface ElementStripProps {
 }
 
 const PRIMARY_ELEMENTS = [
-  { symbol: 'C', color: '#f1f1f3' },
-  { symbol: 'H', color: '#d1d1d6' },
-  { symbol: 'N', color: '#7d93ff' },
-  { symbol: 'O', color: '#ff7676' },
-  { symbol: 'S', color: '#e6c84a' },
-  { symbol: 'P', color: '#f4a34a' },
-  { symbol: 'F', color: '#7bd6a0' },
-  { symbol: 'Cl', color: '#4fd1a1' },
-  { symbol: 'Br', color: '#cf8b6a' },
-  { symbol: 'I', color: '#a78bfa' },
-];
+  'C',
+  'H',
+  'N',
+  'O',
+  'S',
+  'P',
+  'F',
+  'Cl',
+  'Br',
+  'I',
+].map((symbol) => ({ symbol, color: ELEMENT_COLORS[symbol] ?? DEFAULT_ELEMENT_COLOR }));
 
 const MORE_ELEMENTS = [
   'B',
