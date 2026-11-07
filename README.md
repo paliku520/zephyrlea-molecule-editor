@@ -26,6 +26,7 @@ npm run preview
 - 使用 React + Tailwind 自绘顶栏、元素快捷条与左侧垂直工具栏。
 - 通过 Kekule 的交互控制器 API 切换绘制模式（`MolBondIaController`、`MolRingIaController`、`MolNodeChargeIaController`、`SelectIaController` 等），而不是重新实现绘图逻辑。
 - 单键 / 双键 / 三键 / 楔形键（向上）/ 虚楔键（向下）/ 配位键 / 未知立体键、正负电荷（圆圈内加减号图标）、元素原子、R 基团以及各类环模板。
+- 元素工具既能插入也能替换：选中元素后点击空白处插入新原子，点击画布上已有的原子则**就地替换该原子的元素**（化学键与相邻原子保持不变，可撤销）。
 - 通过 `Kekule.IO.saveFormatData(model, 'smi')` 导出 SMILES，结果保存在 React state 中并复制到剪贴板。
 - 支持载入 SMILES 并生成高质量 2D 坐标，同时提供 **整理（Clean Up）**。由于 Kekule 1.0.4 只自带 SMILES 写入器、没有读取器和坐标生成器，这里按需懒加载 OpenChemLib 作为辅助。
 - 整理（Clean Up）会重排每个结构的坐标，并把画布上零散的结构**搬动**到屏幕中央：按原位置从上到下、从左到右排成整齐的行（多行时自动均衡行宽、行内垂直居中，间距一致），以当前视口中心为基准重排；缩放级别保持不变，只有排完仍放不下时才会缩小。单个结构已在屏幕内时不移动任何东西，只修正键角。

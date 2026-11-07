@@ -73,6 +73,8 @@ export interface MoleculeEditorBridge {
 export const ATOM_COLOR = '#e9e9eb';
 export const BOND_COLOR = '#e9e9eb';
 
+const ELEMENT_TOOL_CONTROLLER_ID = 'RepositoryStructureFragmentIaController';
+
 const elementRepositoryItems = new Map<string, any>();
 let openChemLibPromise: Promise<typeof import('openchemlib')> | null = null;
 
@@ -602,12 +604,65 @@ function createElementRepositoryItem(K: KekuleNamespace, symbol: string) {
 }
 
 function activateElementTool(K: KekuleNamespace, editor: any, symbol: string) {
-  const controller = editor.getIaController?.('RepositoryStructureFragmentIaController');
+  const controller = editor.getIaController?.(ELEMENT_TOOL_CONTROLLER_ID);
   if (!controller) return false;
 
   controller.setRepositoryItem?.(createElementRepositoryItem(K, symbol));
-  editor.setActiveIaControllerId?.('RepositoryStructureFragmentIaController');
+  controller.__zephyrleaElementSymbol = symbol;
+  editor.setActiveIaControllerId?.(ELEMENT_TOOL_CONTROLLER_ID);
   return true;
+}
+
+function createNodeModificationData(K: KekuleNamespace, symbol: string) {
+  if (symbol === 'R') return { nodeClass: K.RGroup, props: {} };
+  return { nodeClass: K.Atom, props: { isotopeId: symbol } };
+}
+
+/** Swaps the element of a node in place, keeping its bonds and neighbours. */
+function replaceNodeElement(K: KekuleNamespace, editor: any, node: any, symbol: string) {
+  const operation = K.Editor.OperationUtils?.createNodeModificationOperationFromData?.(
+    node,
+    createNodeModificationData(K, symbol),
+    editor,
+  );
+
+  if (!operation) return false;
+  editor.execOperation?.(operation);
+  return true;
+}
+
+/**
+ * Kekule's repository tool drops a brand-new atom on the cursor and then merges
+ * it into the atom underneath, which keeps the old element. Consume that click
+ * instead, so picking an element and clicking an existing atom replaces it.
+ */
+function installElementReplace(K: KekuleNamespace, editor: any) {
+  const controller = editor.getIaController?.(ELEMENT_TOOL_CONTROLLER_ID);
+  if (!controller || controller.__zephyrleaElementReplace) return;
+
+  controller.__zephyrleaElementReplace = true;
+  const originalPointerDown = controller.react_pointerdown;
+
+  controller.react_pointerdown = function reactPointerDown(event: any) {
+    const symbol: string | undefined = this.__zephyrleaElementSymbol;
+
+    if (!symbol || event?.getButton?.() !== K.X?.Event?.MOUSE_BTN_LEFT) {
+      return originalPointerDown?.call(this, event);
+    }
+
+    const coord = editor.getEventMouseRelCoord?.(event);
+    const node = coord
+      ? editor.getTopmostBasicObjectAtCoord?.(coord, this.getCurrBoundInflation?.())
+      : null;
+
+    if (!(node instanceof K.ChemStructureNode)) {
+      return originalPointerDown?.call(this, event);
+    }
+
+    replaceNodeElement(K, editor, node, symbol);
+    event.preventDefault?.();
+    return true;
+  };
 }
 
 /**
@@ -890,6 +945,8 @@ export function createEditorBridge(
 
   const editor = composer.getEditor();
   const board = createEditorBoard(K, composer);
+
+  installElementReplace(K, editor);
 
   const repaint = () => {
     composer.requestRepaint?.();

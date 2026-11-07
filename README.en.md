@@ -24,6 +24,7 @@ npm run preview
 - Custom React/Tailwind top bar, element strip and vertical tool rail.
 - Tool switching through Kekule's interaction-controller API (`MolBondIaController`, `MolRingIaController`, `MolNodeChargeIaController`, `SelectIaController`, …).
 - Single / double / triple / solid wedge / hashed wedge / dative / wavy bonds, positive/negative charges (drawn as circled +/− badges), element stamps, R-group and ring templates.
+- Element tools both insert and replace: after picking an element, clicking empty canvas inserts a new atom, while clicking an existing atom **replaces its element in place** (bonds and neighbours untouched, undoable).
 - SMILES export through `Kekule.IO.saveFormatData(model, 'smi')`, stored in React state and copied to the clipboard.
 - SMILES import with high-quality 2D coordinates, plus **Clean Up** (OpenChemLib is lazy-loaded as a helper because Kekule 1.0.4 ships a SMILES writer but no SMILES reader/layout engine).
 - Clean Up re-lays out coordinates and **moves** the scattered structures to the middle of the screen: they are packed into tidy rows (top-to-bottom, left-to-right, rows balanced and vertically centred, even spacing) around the current viewport centre. The zoom level is kept; it only shrinks when the packed block cannot fit. A single structure that is already on screen is never moved, only its bond geometry is fixed.
