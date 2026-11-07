@@ -23,7 +23,7 @@ npm run preview
 - Full-bleed Kekule `Composer` mounted from React with all native Kekule toolbars hidden.
 - Custom React/Tailwind top bar, element strip and vertical tool rail.
 - Tool switching through Kekule's interaction-controller API (`MolBondIaController`, `MolRingIaController`, `MolNodeChargeIaController`, `SelectIaController`, …).
-- Single / double / triple / wedge / dative / wavy bonds, positive/negative charges, element stamps, R-group and ring templates.
+- Single / double / triple / solid wedge / hashed wedge / dative / wavy bonds, positive/negative charges (drawn as circled +/− badges), element stamps, R-group and ring templates.
 - SMILES export through `Kekule.IO.saveFormatData(model, 'smi')`, stored in React state and copied to the clipboard.
 - SMILES import with high-quality 2D coordinates, plus **Clean Up** (OpenChemLib is lazy-loaded as a helper because Kekule 1.0.4 ships a SMILES writer but no SMILES reader/layout engine).
 - Clean Up only re-lays out coordinates: the current zoom, scroll position and bond length are preserved, so the drawing never jumps or grows.

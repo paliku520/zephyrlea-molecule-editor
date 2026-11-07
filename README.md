@@ -25,7 +25,7 @@ npm run preview
 - 由 React 挂载的全屏 Kekule `Composer`，并隐藏 Kekule 自带的全部工具栏。
 - 使用 React + Tailwind 自绘顶栏、元素快捷条与左侧垂直工具栏。
 - 通过 Kekule 的交互控制器 API 切换绘制模式（`MolBondIaController`、`MolRingIaController`、`MolNodeChargeIaController`、`SelectIaController` 等），而不是重新实现绘图逻辑。
-- 单键 / 双键 / 三键 / 楔形键 / 配位键 / 未知立体键、正负电荷、元素原子、R 基团以及各类环模板。
+- 单键 / 双键 / 三键 / 楔形键（向上）/ 虚楔键（向下）/ 配位键 / 未知立体键、正负电荷（圆圈内加减号图标）、元素原子、R 基团以及各类环模板。
 - 通过 `Kekule.IO.saveFormatData(model, 'smi')` 导出 SMILES，结果保存在 React state 中并复制到剪贴板。
 - 支持载入 SMILES 并生成高质量 2D 坐标，同时提供 **整理（Clean Up）**。由于 Kekule 1.0.4 只自带 SMILES 写入器、没有读取器和坐标生成器，这里按需懒加载 OpenChemLib 作为辅助。
 - 整理只重排坐标：保持当前缩放级别、滚动位置与键长不变，结构不会突然放大或跳动。

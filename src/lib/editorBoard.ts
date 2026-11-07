@@ -153,16 +153,7 @@ export function createEditorBoard(K: KekuleNamespace, composer: any): EditorBoar
     if (viewCenter) {
       // Kekule resets the scroll position asynchronously after a size change,
       // so keep re-applying until its own layout pass has finished.
-      const restoreViewCenter = () => {
-        const screenCoord = editor.objCoordToScreen?.(viewCenter);
-        if (!screenCoord) return;
-
-        const left = Math.max(0, Math.round(screenCoord.x - scroller.clientWidth / 2));
-        const top = Math.max(0, Math.round(screenCoord.y - scroller.clientHeight / 2));
-
-        if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
-        if (scroller.scrollTop !== top) scroller.scrollTop = top;
-      };
+      const restoreViewCenter = () => applyAnchor(viewCenter);
 
       restoreViewCenter();
       window.requestAnimationFrame(restoreViewCenter);
@@ -171,6 +162,19 @@ export function createEditorBoard(K: KekuleNamespace, composer: any): EditorBoar
 
     syncScrollListener();
   };
+
+  /** Scroll so that a tracked object coordinate sits in the viewport center. */
+  function applyAnchor(anchor: { x: number; y: number }) {
+    const scroller = getScroller();
+    const screenCoord = editor?.objCoordToScreen?.(anchor);
+    if (!scroller || !screenCoord) return;
+
+    const left = Math.max(0, Math.round(screenCoord.x - scroller.clientWidth / 2));
+    const top = Math.max(0, Math.round(screenCoord.y - scroller.clientHeight / 2));
+
+    if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
+    if (scroller.scrollTop !== top) scroller.scrollTop = top;
+  }
 
   /** Center the viewport on the drawing surface. */
   const centerView = () => {
@@ -412,14 +416,26 @@ export function createEditorBoard(K: KekuleNamespace, composer: any): EditorBoar
     editor.zoomTo = (...args: any[]) => {
       const result = originalZoomTo(...args);
 
+      // Remember what the middle of the viewport was pointing at, so the
+      // delayed passes below can put it back exactly where it was.
+      const scroller = getScroller();
+      const viewPoint =
+        scroller && editor.screenCoordToObj?.({
+          x: scroller.scrollLeft + scroller.clientWidth / 2,
+          y: scroller.scrollTop + scroller.clientHeight / 2,
+        });
+      const anchor = viewPoint ? trackAnchor({ x: viewPoint.x, y: viewPoint.y }) : null;
+
       // Kekule re-lays out the scroller asynchronously after a zoom (it moves
       // the scroll back to keep the zoom center), so re-apply a few times.
       const settleZoom = () => {
-        if (disposed) return;
+        if (disposed || pointerDown) return;
 
         rebalance();
+
         if (getMolecules(K, composer).length > 0) {
           centerContentInArena();
+          if (anchor) applyAnchor(anchor);
         } else {
           centerView();
         }

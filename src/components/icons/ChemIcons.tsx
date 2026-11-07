@@ -54,6 +54,20 @@ export function WedgeBondIcon(props: ChemIconProps) {
   );
 }
 
+/** Hashed (dashed) wedge: a stereo bond pointing away from the viewer. */
+export function HashedWedgeBondIcon(props: ChemIconProps) {
+  return (
+    <ChemSvg {...props}>
+      <path d="M2.9 13.4 10.6 21.1" strokeWidth={1.6} />
+      <path d="M5.8 11.8 12.2 18.2" strokeWidth={1.5} />
+      <path d="M8.7 10.2 13.8 15.3" strokeWidth={1.4} />
+      <path d="M11.6 8.6 15.4 12.4" strokeWidth={1.3} />
+      <path d="M14.4 6.9 17.1 9.6" strokeWidth={1.2} />
+      <path d="M16.7 5.7 18.3 7.3" strokeWidth={1.1} />
+    </ChemSvg>
+  );
+}
+
 export function DativeBondIcon(props: ChemIconProps) {
   return (
     <ChemSvg {...props}>
@@ -67,6 +81,26 @@ export function WavyBondIcon(props: ChemIconProps) {
   return (
     <ChemSvg {...props}>
       <path d="M3.2 16.9c2-3.3 4.5-3.3 6.5 0s4.5 3.3 6.5 0 4.5-3.3 6.5 0" transform="rotate(-45 12 12)" />
+    </ChemSvg>
+  );
+}
+
+/** Charge badge: a circled sign, the way formal charges are drawn on atoms. */
+export function PositiveChargeIcon(props: ChemIconProps) {
+  return (
+    <ChemSvg {...props}>
+      <circle cx="12" cy="12" r="8.6" strokeWidth={1.6} />
+      <path d="M12 8.4v7.2" strokeWidth={1.8} />
+      <path d="M8.4 12h7.2" strokeWidth={1.8} />
+    </ChemSvg>
+  );
+}
+
+export function NegativeChargeIcon(props: ChemIconProps) {
+  return (
+    <ChemSvg {...props}>
+      <circle cx="12" cy="12" r="8.6" strokeWidth={1.6} />
+      <path d="M8.4 12h7.2" strokeWidth={1.8} />
     </ChemSvg>
   );
 }

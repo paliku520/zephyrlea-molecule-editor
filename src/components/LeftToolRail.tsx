@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
-import { Eraser, Hand, Lasso, Minus, MousePointer2, Plus } from 'lucide-react';
+import { Eraser, Hand, Lasso, MousePointer2 } from 'lucide-react';
 import type { ToolId } from '../lib/editorBridge';
 import { IconButton } from './ui/IconButton';
 import {
@@ -12,6 +12,9 @@ import {
   CyclopropaneIcon,
   DativeBondIcon,
   DoubleBondIcon,
+  HashedWedgeBondIcon,
+  NegativeChargeIcon,
+  PositiveChargeIcon,
   SingleBondIcon,
   TripleBondIcon,
   WavyBondIcon,
@@ -45,15 +48,18 @@ const TOOL_GROUPS: ToolDefinition[][] = [
   ],
   [
     { tool: 'double', label: '双键', icon: <DoubleBondIcon width={19} height={19} /> },
-    { tool: 'dative', label: '配位键', icon: <DativeBondIcon width={19} height={19} /> },
+    { tool: 'wedgeDown', label: '虚楔键（向下）', icon: <HashedWedgeBondIcon width={19} height={19} /> },
   ],
   [
     { tool: 'triple', label: '三键', icon: <TripleBondIcon width={19} height={19} /> },
+    { tool: 'dative', label: '配位键', icon: <DativeBondIcon width={19} height={19} /> },
+  ],
+  [
     { tool: 'wavy', label: '未知立体键', icon: <WavyBondIcon width={19} height={19} /> },
   ],
   [
-    { tool: 'chargePlus', label: '加正电荷', icon: <Plus size={19} strokeWidth={1.8} /> },
-    { tool: 'chargeMinus', label: '加负电荷', icon: <Minus size={19} strokeWidth={1.8} /> },
+    { tool: 'chargePlus', label: '加正电荷', icon: <PositiveChargeIcon width={19} height={19} /> },
+    { tool: 'chargeMinus', label: '加负电荷', icon: <NegativeChargeIcon width={19} height={19} /> },
   ],
   [
     { tool: 'benzene', label: '苯环', icon: <BenzeneIcon width={19} height={19} /> },
@@ -78,7 +84,7 @@ export function LeftToolRail({ ready, activeTool, onSelectTool }: LeftToolRailPr
       <div className="flex w-full flex-col">
         {TOOL_GROUPS.map((group, groupIndex) => (
           <Fragment key={group.map((item) => item.tool).join('-')}>
-            {(groupIndex === 2 || groupIndex === 6) && (
+            {(groupIndex === 2 || groupIndex === 7) && (
               <div className="my-2 h-px w-full bg-white/[0.08]" />
             )}
             <div
