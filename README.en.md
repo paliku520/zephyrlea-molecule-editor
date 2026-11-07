@@ -26,6 +26,7 @@ npm run preview
 - Single / double / triple / wedge / dative / wavy bonds, positive/negative charges, element stamps, R-group and ring templates.
 - SMILES export through `Kekule.IO.saveFormatData(model, 'smi')`, stored in React state and copied to the clipboard.
 - SMILES import with high-quality 2D coordinates, plus **Clean Up** (OpenChemLib is lazy-loaded as a helper because Kekule 1.0.4 ships a SMILES writer but no SMILES reader/layout engine).
+- Clean Up only re-lays out coordinates: the current zoom, scroll position and bond length are preserved, so the drawing never jumps or grows.
 - Open `.mol`, `.sdf`, `.cml`, `.rxn`, `.kcj`, `.json` and `.smi` files.
 - Undo / redo, zoom, reset zoom, clear, keyboard shortcuts.
 - Dark Kekule render theme (light atoms and bonds) and smoothed rendering with antialias + 2× oversampling.

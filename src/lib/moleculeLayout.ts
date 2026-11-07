@@ -13,7 +13,11 @@ const IDEAL_BOND_LENGTH = 0.8;
  * Kekule itself only ships a coordinate generator through optional OpenBabel
  * assets, so a pure JS layout keeps the first delivery self-contained.
  */
-export function layoutMolecule(_kekule: KekuleNamespace, mol: any): number {
+export function layoutMolecule(
+  _kekule: KekuleNamespace,
+  mol: any,
+  targetBondLength = IDEAL_BOND_LENGTH,
+): number {
   const nodes: any[] = mol?.getNodes?.() ?? [];
   if (nodes.length === 0) return 0;
 
@@ -65,9 +69,12 @@ export function layoutMolecule(_kekule: KekuleNamespace, mol: any): number {
     components.push(component);
   }
 
-  const laidOutComponents = components.map((component) => layoutComponent(component, edges));
+  const bondLength = targetBondLength > 0 ? targetBondLength : IDEAL_BOND_LENGTH;
+  const laidOutComponents = components.map((component) =>
+    layoutComponent(component, edges, bondLength),
+  );
   const finalPoints = new Array<Point>(nodes.length);
-  const componentGap = 1.6;
+  const componentGap = bondLength * 2;
   let offsetX = 0;
 
   for (const component of laidOutComponents) {
@@ -111,6 +118,7 @@ export function layoutMolecule(_kekule: KekuleNamespace, mol: any): number {
 function layoutComponent(
   indices: number[],
   edges: Array<[number, number]>,
+  targetBondLength: number,
 ): { indices: number[]; points: Point[] } {
   const count = indices.length;
   if (count === 1) {
@@ -205,8 +213,9 @@ function layoutComponent(
     bondLengthSum += Math.hypot(points[start].x - points[end].x, points[start].y - points[end].y);
   }
 
-  const averageBondLength = localEdges.length > 0 ? bondLengthSum / localEdges.length : IDEAL_BOND_LENGTH;
-  const scale = IDEAL_BOND_LENGTH / (averageBondLength || IDEAL_BOND_LENGTH);
+  const averageBondLength =
+    localEdges.length > 0 ? bondLengthSum / localEdges.length : targetBondLength;
+  const scale = targetBondLength / (averageBondLength || targetBondLength);
 
   for (const point of points) {
     point.x *= scale;

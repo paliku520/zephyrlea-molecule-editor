@@ -140,6 +140,19 @@ function refitAfterLoad(K: KekuleNamespace, composer: any) {
   });
 }
 
+function getMedianBondLength(K: KekuleNamespace, molecule: any): number {
+  try {
+    const median = molecule?.getConnectorLengthMedian?.(K.CoordMode.COORD2D, true);
+    if (typeof median === 'number' && Number.isFinite(median) && median > 0) {
+      return median;
+    }
+  } catch {
+    // fall through to the default bond length
+  }
+
+  return K.globalOptions?.structure?.defaultBondLength2D ?? 0.8;
+}
+
 function getCentroid(nodes: any[]) {
   if (nodes.length === 0) return { x: 0, y: 0 };
 
@@ -433,6 +446,9 @@ export function createEditorBridge(
         for (const molecule of molecules) {
           let cleaned = false;
 
+          // Keep the on-screen size stable: Clean Up must not change zoom or bond length.
+          const oldBondLength = getMedianBondLength(K, molecule);
+
           if (OclMolecule) {
             try {
               const molfile = K.IO.saveFormatData(molecule, 'mol');
@@ -450,15 +466,26 @@ export function createEditorBridge(
                   );
 
                   if (sameAtoms) {
+                    const newBondLength = getMedianBondLength(K, cleanedMolecule);
+                    const rawScale = newBondLength > 0 ? oldBondLength / newBondLength : 1;
+                    const scale = Math.min(Math.max(rawScale, 0.2), 5);
+
                     const oldCenter = getCentroid(oldNodes);
-                    const newCenter = getCentroid(newNodes);
+                    const rawNewCenter = getCentroid(newNodes);
+                    const newCenter = {
+                      x: rawNewCenter.x * scale,
+                      y: rawNewCenter.y * scale,
+                    };
                     const offsetX = oldCenter.x - newCenter.x;
                     const offsetY = oldCenter.y - newCenter.y;
 
                     oldNodes.forEach((node, index) => {
                       const coord = newNodes[index].getCoord2D?.(true);
                       if (coord) {
-                        node.setCoord2D?.({ x: coord.x + offsetX, y: coord.y + offsetY });
+                        node.setCoord2D?.({
+                          x: coord.x * scale + offsetX,
+                          y: coord.y * scale + offsetY,
+                        });
                       }
                     });
 
@@ -472,15 +499,15 @@ export function createEditorBridge(
           }
 
           if (!cleaned) {
-            layoutMolecule(K, molecule);
+            layoutMolecule(K, molecule, oldBondLength);
           }
         }
       } finally {
         space?.endUpdate?.();
       }
 
+      // Deliberately keep the current zoom and scroll position.
       repaint();
-      refitAfterLoad(K, composer);
       return molecules.length;
     },
     clear() {
