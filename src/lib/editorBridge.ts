@@ -1,6 +1,7 @@
 import type { EditorBoard } from './editorBoard';
 import { createEditorBoard } from './editorBoard';
 import { ATOMIC_NUMBER_LIMIT, DEFAULT_ELEMENT_COLOR, ELEMENT_COLORS } from './elementColors';
+import { installGroupNameTranslations } from './groupNames';
 import type { KekuleNamespace } from './kekule';
 import { installBondLineStyle } from './kekuleBondStyle';
 import { installLabelBaseline } from './kekuleLabelStyle';
@@ -775,6 +776,7 @@ function transformSelection(
 }
 
 const CLICK_SELECT_TOLERANCE_PX = 4;
+const DOUBLE_CLICK_INTERVAL_MS = 400;
 
 /**
  * Kekule's select controller only listens to marquee drags, so a plain click
@@ -786,6 +788,7 @@ function installClickSelection(editor: any) {
   if (!host) return () => {};
 
   let startClient: { x: number; y: number } | null = null;
+  let lastClick: { time: number; x: number; y: number } | null = null;
 
   const onPointerDown = (event: PointerEvent) => {
     startClient = { x: event.clientX, y: event.clientY };
@@ -799,6 +802,25 @@ function installClickSelection(editor: any) {
 
     if (distance > CLICK_SELECT_TOLERANCE_PX) return;
     if (editor.getActiveIaControllerId?.() !== 'SelectIaController') return;
+
+    // The second click of a double click opens Kekule's inline atom setter;
+    // drop the selection the first click made so its floating bar stays out of
+    // the popup's way.
+    const isSecondClick =
+      lastClick !== null &&
+      event.timeStamp - lastClick.time < DOUBLE_CLICK_INTERVAL_MS &&
+      Math.hypot(event.clientX - lastClick.x, event.clientY - lastClick.y) <= CLICK_SELECT_TOLERANCE_PX;
+    lastClick = isSecondClick ? null : { time: event.timeStamp, x: event.clientX, y: event.clientY };
+
+    if (isSecondClick) {
+      // Kekule's select controller re-selects the marquee area on pointer up,
+      // so drop the selection after the event has been processed.
+      window.setTimeout(() => {
+        editor.deselectAll?.();
+        editor.recalcSelectionAreaMarker?.();
+      }, 0);
+      return;
+    }
 
     const coord = editor.getEventMouseRelCoord?.(event);
     if (!coord) return;
@@ -947,6 +969,7 @@ export function createEditorBridge(
   const board = createEditorBoard(K, composer);
 
   installElementReplace(K, editor);
+  installGroupNameTranslations(K);
 
   const repaint = () => {
     composer.requestRepaint?.();

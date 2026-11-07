@@ -111,10 +111,118 @@ input {
   background: transparent !important;
 }
 
-/* Keep Kekule's inline popups legible against the dark canvas. */
-.kekule-host .K-Chem-StructureNodeSetter,
-.kekule-host .K-Chem-StructureNodeSetter .K-Chem-StructureNodeSetter-Panel {
-  background-color: #232325 !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+/* ---------------------------------------------------------------------------
+   Kekule atom / group picker
+   Double-clicking an atom opens Kekule's StructureNodeSetter plus a
+   StructureNodeSelectPanel. Both live in the body-level .K-Top-Layer, i.e.
+   outside .kekule-host, so they need their own dark styling.
+   --------------------------------------------------------------------------- */
+
+.K-Top-Layer .K-Chem-StructureNodeSetter,
+.K-Top-Layer .K-Chem-StructureNodeSetter .K-Chem-StructureNodeSetter-Panel,
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel,
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Normal-Background,
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page,
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page-Container {
+  background-color: #232326 !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
   color: #e8e8ea !important;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSetter {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55) !important;
+}
+
+/* Tabs: 原子 / 基团 */
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabButtonGroup .K-Button {
+  background-color: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  color: #9a9aa2 !important;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabButtonGroup .K-Button.K-State-Active {
+  background-color: rgba(137, 181, 250, 0.14) !important;
+  border-bottom-color: var(--color-accent) !important;
+  color: #f4f4f7 !important;
+}
+
+/* Element and group stamps */
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Chem-StructureNodeSelectPanel-SetButton {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 6px !important;
+  color: #e8e8ea !important;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Chem-StructureNodeSelectPanel-SetButton:hover {
+  background-color: rgba(137, 181, 250, 0.18) !important;
+  border-color: rgba(137, 181, 250, 0.45) !important;
+  color: #ffffff !important;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Section + .K-Section {
+  border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page-Container,
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSelectPanel ::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* The text box and its dropdown arrow */
+.K-Top-Layer .K-Chem-StructureNodeSetter .K-TextBox,
+.K-Top-Layer .K-Chem-StructureNodeSetter input {
+  background-color: transparent !important;
+  color: #e8e8ea !important;
+  caret-color: var(--color-accent);
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSetter input::selection {
+  background-color: rgba(137, 181, 250, 0.35);
+  color: #ffffff;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 0 7px 7px 0 !important;
+  color: #e8e8ea !important;
+  opacity: 1 !important;
+  width: 26px !important;
+}
+
+.K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget:hover,
+.K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget.K-State-Active {
+  background-color: rgba(137, 181, 250, 0.24) !important;
+}
+
+/* The dropdown arrow ships as a dark PNG glyph, invisible on a dark box. */
+.K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget .K-Assoc-Glyph-Content {
+  filter: invert(1) brightness(1.5);
+  transform: scale(1.35);
 }
