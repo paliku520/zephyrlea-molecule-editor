@@ -100,7 +100,7 @@ export function TopBar({
           autoComplete="off"
           placeholder="粘贴 SMILES，例如 CC(=O)Oc1ccccc1C(=O)O"
           aria-label="SMILES 输入"
-          className="h-9 w-full min-w-0 max-w-[560px] rounded-md border border-white/[0.13] bg-[#171717] px-3 text-[12.5px] text-[#e8e8ea] outline-none transition-colors placeholder:text-[#707077] focus:border-[#94a82a]/70 focus:ring-1 focus:ring-[#94a82a]/25 disabled:opacity-50"
+          className="h-9 w-full min-w-0 max-w-[560px] rounded-md border border-white/[0.13] bg-[#171717] px-3 text-[12.5px] text-[#e8e8ea] outline-none transition-colors placeholder:text-[#707077] focus:border-accent/70 focus:ring-1 focus:ring-accent/25 disabled:opacity-50"
         />
         <button
           type="submit"
@@ -142,7 +142,7 @@ export function TopBar({
           type="button"
           onClick={onExport}
           disabled={!ready}
-          className="inline-flex h-9 items-center gap-2.5 rounded-lg bg-[#758815] px-[18px] text-[13px] font-semibold text-[#14170a] shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_1px_2px_rgba(0,0,0,0.3)] transition-colors hover:bg-[#84981b] active:bg-[#6b7c12] disabled:pointer-events-none disabled:opacity-40"
+          className="inline-flex h-9 items-center gap-2.5 rounded-lg bg-accent px-[18px] text-[13px] font-semibold text-accent-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(0,0,0,0.3)] transition-colors hover:bg-accent-strong active:bg-accent-deep disabled:pointer-events-none disabled:opacity-40"
         >
           <Download size={16} strokeWidth={2} />
           <span>导出</span>

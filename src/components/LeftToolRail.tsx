@@ -120,7 +120,7 @@ export function LeftToolRail({ ready, activeTool, onSelectTool }: LeftToolRailPr
             className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/25 disabled:pointer-events-none disabled:opacity-35 ${
               activeTool === 'element:R'
                 ? 'bg-[#f1f1f2] text-[#151516]'
-                : 'text-[#5594ff] hover:bg-white/[0.07] hover:text-[#7db0ff]'
+                : 'text-accent hover:bg-white/[0.07] hover:text-accent-strong'
             }`}
           >
             <span className="text-[15px] font-semibold tracking-tight">R</span>

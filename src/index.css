@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Theme accent: one place to change the shell's highlight color. */
+@theme {
+  --color-accent: #89b5fa;
+  --color-accent-strong: #a8c7fc;
+  --color-accent-deep: #6d9cef;
+  --color-accent-ink: #0f172a;
+}
+
 :root {
   color-scheme: dark;
   font-family: "Inter", "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;

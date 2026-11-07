@@ -89,6 +89,9 @@ function fitToView(K: KekuleNamespace, composer: any, board: EditorBoard) {
   const targetZoom = Math.max(0.45, Math.min(currentZoom * factor, 2.6));
 
   editor.zoomTo?.(targetZoom);
+  // The fit is about to place the drawing by hand, so drop the restores that
+  // the zoom queued for the previous view.
+  board.clearPendingRestores();
   board.rebalance({ preserveViewCenter: false });
 
   // Kekule finishes its own layout (and may reset the scroll) right after a

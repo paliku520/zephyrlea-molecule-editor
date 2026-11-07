@@ -33,6 +33,8 @@ export interface EditorBoard {
   centerView(): void;
   centerEmptyView(): void;
   notifyContentChanged(): void;
+  /** Drop restores queued by a zoom or resize, e.g. before re-centering by hand. */
+  clearPendingRestores(): void;
   dispose(): void;
 }
 
@@ -435,7 +437,7 @@ export function createEditorBoard(K: KekuleNamespace, composer: any): EditorBoar
 
         if (getMolecules(K, composer).length > 0) {
           centerContentInArena();
-          if (anchor) applyAnchor(anchor);
+          if (anchor && pendingAnchors.includes(anchor)) applyAnchor(anchor);
         } else {
           centerView();
         }
@@ -475,6 +477,9 @@ export function createEditorBoard(K: KekuleNamespace, composer: any): EditorBoar
     centerView,
     centerEmptyView,
     notifyContentChanged: scheduleContentFit,
+    clearPendingRestores: () => {
+      pendingAnchors = [];
+    },
     dispose,
   };
 }

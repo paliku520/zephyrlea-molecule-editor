@@ -30,6 +30,7 @@ npm run preview
 - Open `.mol`, `.sdf`, `.cml`, `.rxn`, `.kcj`, `.json` and `.smi` files.
 - Undo / redo, zoom, reset zoom, clear, keyboard shortcuts.
 - A practically endless canvas: the drawing surface is far larger than the viewport, and panning near its border silently moves the whole drawing back to the middle, so you can keep panning in any direction while nothing is ever drawn outside the canvas.
+- One theme color: `--color-accent` (`#89B5FA`) in `src/index.css` drives the export button, input focus ring, toast icons and the R-group button.
 - Dark Kekule render theme (light atoms and bonds) and smoothed rendering with antialias + 2× oversampling.
 - Bond stroke width and multiple-bond spacing scale with the bond length, so lines stay visible when zoomed in.
 - Double bonds are styled per context: inside a ring the second line is drawn on the ring side and shortened to 72%, so it never merges with the neighbouring bond or overshoots a vertex; outside rings the original look is kept, with two equal-length parallel lines spanning both atoms.

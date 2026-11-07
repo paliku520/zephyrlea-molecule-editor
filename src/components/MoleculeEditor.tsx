@@ -18,7 +18,7 @@ interface ToastState {
 
 function ToastIcon({ kind }: { kind: ToastState['kind'] }) {
   if (kind === 'success') {
-    return <Check size={16} strokeWidth={2.2} className="mt-0.5 shrink-0 text-[#a9bd3d]" />;
+    return <Check size={16} strokeWidth={2.2} className="mt-0.5 shrink-0 text-accent" />;
   }
 
   if (kind === 'error') {
