@@ -935,6 +935,30 @@ function applyTool(K: KekuleNamespace, composer: any, tool: ToolId): boolean {
   }
 }
 
+/**
+ * Kekule inserts the predefined substituents of its picker as condensed groups
+ * (a `SubGroup` drawn as its abbreviation such as "Ph"). Expand them so the
+ * canvas shows the real structure and the atoms stay editable.
+ */
+function expandCollapsedGroups(K: KekuleNamespace, composer: any) {
+  let expanded = false;
+
+  const visit = (obj: any) => {
+    if (!obj) return;
+
+    if (obj instanceof K.SubGroup && obj.isExpanded?.() === false) {
+      obj.setExpanded?.(true);
+      expanded = true;
+    }
+
+    const childCount = obj.getChildCount?.() ?? 0;
+    for (let i = 0; i < childCount; i += 1) visit(obj.getChildAt?.(i));
+  };
+
+  for (const molecule of getMolecules(K, composer)) visit(molecule);
+  return expanded;
+}
+
 export function createEditorBridge(
   K: KekuleNamespace,
   host: HTMLElement,
@@ -987,6 +1011,10 @@ export function createEditorBridge(
     window.requestAnimationFrame(() => {
       pendingContentCheck = false;
       if (destroyed) return;
+
+      if (expandCollapsedGroups(K, composer)) {
+        repaint();
+      }
 
       callbacks.onContentChange?.(hasContent());
       board.notifyContentChanged();
