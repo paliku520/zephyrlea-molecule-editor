@@ -1,4 +1,5 @@
 import type { KekuleNamespace } from './kekule';
+import { installBondLineStyle } from './kekuleBondStyle';
 import { layoutMolecule } from './moleculeLayout';
 
 export type ToolId =
@@ -510,6 +511,7 @@ export function createEditorBridge(
   callbacks: EditorBridgeCallbacks = {},
 ): MoleculeEditorBridge {
   applyDarkRenderTheme(K);
+  installBondLineStyle(K);
 
   let destroyed = false;
   const composer = new K.Editor.Composer(host);

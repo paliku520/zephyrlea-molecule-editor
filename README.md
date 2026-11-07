@@ -32,6 +32,8 @@ npm run preview
 - 支持打开 `.mol`、`.sdf`、`.cml`、`.rxn`、`.kcj`、`.json`、`.smi` 文件。
 - 撤销 / 重做、缩放、重置缩放、清空画布，以及键盘快捷键。
 - Kekule 暗色渲染主题（原子与化学键为浅色），并通过抗锯齿与 2 倍超采样让线条更平滑。
+- 化学键线宽、多重键间距均按键长等比缩放：放大后线条不会变细。
+- 双键样式区分环内与链上：环内双键的第二根线始终画在环内侧并缩短至 72%，不会与相邻键并线或超出顶点；非环状（链状）双键保持原有样式，两根等长平行线完整贯穿两个原子。
 
 ## 目录结构
 
@@ -40,6 +42,7 @@ public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本�
 src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
 src/components/icons/       自定义 SVG 化学图标
 src/lib/editorBridge.ts     Kekule Composer 生命周期、工具切换、SMILES 读写、自适应视图
+src/lib/kekuleBondStyle.ts  化学键线宽 / 双键间距 / 环内双键朝向的渲染补丁
 src/lib/moleculeLayout.ts   无坐标结构的纯 JS 兜底布局算法
 src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 ```
