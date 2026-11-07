@@ -4,7 +4,7 @@ import { ATOMIC_NUMBER_LIMIT, DEFAULT_ELEMENT_COLOR, ELEMENT_COLORS } from './el
 import type { KekuleNamespace } from './kekule';
 import { installBondLineStyle } from './kekuleBondStyle';
 import { installLabelBaseline } from './kekuleLabelStyle';
-import { getEditorScroller, getMolecules, getUnionBox } from './kekuleSpace';
+import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
 
 export type ToolId =
@@ -64,7 +64,39 @@ function loadOpenChemLib() {
   return openChemLibPromise;
 }
 
-function fitToView(K: KekuleNamespace, composer: any, board: EditorBoard) {
+interface FitToViewOptions {
+  /** Let the view zoom in when the drawing is smaller than the viewport. */
+  allowZoomIn?: boolean;
+  /** Only touch the view when part of the drawing is outside the viewport. */
+  onlyWhenClipped?: boolean;
+  /** Lower zoom bound, so even widely scattered fragments can be gathered. */
+  minZoom?: number;
+}
+
+/** True when any part of the drawing sits outside the visible viewport. */
+function isContentClipped(K: KekuleNamespace, composer: any, editor: any) {
+  const box = getUnionBox(K, getMolecules(K, composer));
+  const visible = editor?.getVisibleClientScreenBox?.();
+  if (!box || !visible) return false;
+
+  const cornerA = editor.objCoordToScreen?.({ x: box.x1, y: box.y1 });
+  const cornerB = editor.objCoordToScreen?.({ x: box.x2, y: box.y2 });
+  if (!cornerA || !cornerB) return false;
+
+  const left = Math.min(cornerA.x, cornerB.x);
+  const right = Math.max(cornerA.x, cornerB.x);
+  const top = Math.min(cornerA.y, cornerB.y);
+  const bottom = Math.max(cornerA.y, cornerB.y);
+
+  return left < visible.x1 || right > visible.x2 || top < visible.y1 || bottom > visible.y2;
+}
+
+function fitToView(
+  K: KekuleNamespace,
+  composer: any,
+  board: EditorBoard,
+  options: FitToViewOptions = {},
+) {
   const editor = composer.getEditor?.();
   const molecules = getMolecules(K, composer);
   if (!editor || molecules.length === 0) return false;
@@ -82,13 +114,17 @@ function fitToView(K: KekuleNamespace, composer: any, board: EditorBoard) {
   const contentHeight = Math.abs(box.y2 - box.y1) * screenScale;
   if (screenScale <= 0 || contentWidth < 1 || contentHeight < 1) return false;
 
+  if (options.onlyWhenClipped && !isContentClipped(K, composer, editor)) return false;
+
   const padding = 120;
   const factor = Math.min(
     (visible.width - padding) / contentWidth,
     (visible.height - padding) / contentHeight,
   );
   const currentZoom = editor.getCurrZoom?.() ?? 1;
-  const targetZoom = Math.max(0.45, Math.min(currentZoom * factor, 2.6));
+  const maxZoom = options.allowZoomIn === false ? currentZoom : 2.6;
+  const minZoom = options.minZoom ?? 0.45;
+  const targetZoom = Math.max(minZoom, Math.min(currentZoom * factor, maxZoom));
 
   editor.zoomTo?.(targetZoom);
   // The fit is about to place the drawing by hand, so drop the restores that
@@ -108,6 +144,251 @@ function fitToView(K: KekuleNamespace, composer: any, board: EditorBoard) {
   centerOnMolecules();
   window.requestAnimationFrame(centerOnMolecules);
   window.setTimeout(centerOnMolecules, 80);
+
+  return true;
+}
+
+/** Gap and outer margin, in rendered pixels, used by the Clean Up arrangement. */
+const ARRANGE_GAP_PX = 64;
+const ARRANGE_MARGIN_PX = 28;
+/** Extra room around a component, in object units, so labels are not clipped. */
+const ARRANGE_UNIT_PADDING = 0.5;
+
+interface ArrangeUnit {
+  nodes: any[];
+  box: { x1: number; y1: number; x2: number; y2: number };
+}
+
+/**
+ * Split the drawing into the pieces a user perceives as separate structures:
+ * connected components, so disconnected parts of one imported molecule are
+ * rearranged as well.
+ */
+function collectArrangeUnits(K: KekuleNamespace, molecules: any[]): ArrangeUnit[] {
+  const units: ArrangeUnit[] = [];
+
+  for (const molecule of molecules) {
+    const nodes: any[] = molecule.getNodes?.() ?? [];
+    if (nodes.length === 0) continue;
+
+    const neighbours = new Map<any, any[]>();
+    for (const node of nodes) neighbours.set(node, []);
+
+    for (const connector of molecule.getConnectors?.() ?? []) {
+      const connected = connector.getConnectedObjs?.() ?? [];
+      if (connected.length !== 2) continue;
+
+      neighbours.get(connected[0])?.push(connected[1]);
+      neighbours.get(connected[1])?.push(connected[0]);
+    }
+
+    const visited = new Set<any>();
+    for (const start of nodes) {
+      if (visited.has(start)) continue;
+
+      const component: any[] = [];
+      const queue = [start];
+      visited.add(start);
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        component.push(current);
+
+        for (const next of neighbours.get(current) ?? []) {
+          if (visited.has(next)) continue;
+          visited.add(next);
+          queue.push(next);
+        }
+      }
+
+      let x1 = Number.POSITIVE_INFINITY;
+      let y1 = Number.POSITIVE_INFINITY;
+      let x2 = Number.NEGATIVE_INFINITY;
+      let y2 = Number.NEGATIVE_INFINITY;
+
+      for (const node of component) {
+        const coord =
+          node.getAbsCoordOfMode?.(K.CoordMode.COORD2D, true) ?? node.getCoord2D?.(true);
+        if (!coord) continue;
+
+        x1 = Math.min(x1, coord.x);
+        y1 = Math.min(y1, coord.y);
+        x2 = Math.max(x2, coord.x);
+        y2 = Math.max(y2, coord.y);
+      }
+
+      if (!Number.isFinite(x1)) continue;
+
+      units.push({
+        nodes: component,
+        box: {
+          x1: x1 - ARRANGE_UNIT_PADDING,
+          y1: y1 - ARRANGE_UNIT_PADDING,
+          x2: x2 + ARRANGE_UNIT_PADDING,
+          y2: y2 + ARRANGE_UNIT_PADDING,
+        },
+      });
+    }
+  }
+
+  return units;
+}
+
+/**
+ * Clean Up rearranges the drawing itself: every structure is moved into an
+ * evenly spaced block centred on the current viewport, keeping the zoom level
+ * when it fits. Structures are placed in reading order (top row first, then
+ * left to right) so the result follows the original layout.
+ */
+function arrangeFragments(
+  K: KekuleNamespace,
+  composer: any,
+  editor: any,
+  board: EditorBoard,
+) {
+  const molecules = getMolecules(K, composer).filter(
+    (molecule) => (molecule.getNodeCount?.() ?? 0) > 0,
+  );
+  if (molecules.length === 0) return false;
+
+  const scroller = getEditorScroller(editor);
+  if (!scroller) return false;
+
+  const units = collectArrangeUnits(K, molecules);
+  if (units.length === 0) return false;
+  // A single structure that is already on screen needs no rearrangement.
+  if (units.length === 1 && !isContentClipped(K, composer, editor)) return false;
+
+  const viewCenter = editor.screenCoordToObj?.({
+    x: scroller.scrollLeft + scroller.clientWidth / 2,
+    y: scroller.scrollTop + scroller.clientHeight / 2,
+  });
+  if (!viewCenter) return false;
+
+  const layout = () => {
+    const scale = getObjScreenScale(editor);
+    if (scale <= 0) return null;
+
+    const items = units.map((unit) => ({
+      unit,
+      width: Math.abs(unit.box.x2 - unit.box.x1) * scale,
+      height: Math.abs(unit.box.y2 - unit.box.y1) * scale,
+      centerX: (unit.box.x1 + unit.box.x2) / 2,
+      centerY: (unit.box.y1 + unit.box.y2) / 2,
+    }));
+
+    const averageHeight = items.reduce((sum, item) => sum + item.height, 0) / items.length;
+    const rowTolerance = Math.max(1, averageHeight / 3);
+    items.sort((a, b) => {
+      const rowA = Math.round((a.centerY * scale) / rowTolerance);
+      const rowB = Math.round((b.centerY * scale) / rowTolerance);
+      if (rowA !== rowB) return rowB - rowA;
+      return a.centerX - b.centerX;
+    });
+
+    const availableWidth = Math.max(scroller.clientWidth - ARRANGE_MARGIN_PX * 2, 160);
+    const availableHeight = Math.max(scroller.clientHeight - ARRANGE_MARGIN_PX * 2, 160);
+
+    // Balance the rows so a two-row layout does not end up as 7 + 1.
+    const averageWidth = items.reduce((sum, item) => sum + item.width, 0) / items.length;
+    const capacity = Math.max(
+      1,
+      Math.floor((availableWidth + ARRANGE_GAP_PX) / (averageWidth + ARRANGE_GAP_PX)),
+    );
+    const rowCount = Math.ceil(items.length / capacity);
+    const perRow = Math.max(1, Math.ceil(items.length / rowCount));
+
+    const rows: (typeof items)[] = [];
+    let currentRow: typeof items = [];
+    let currentWidth = 0;
+
+    for (const item of items) {
+      const extra = currentRow.length === 0 ? item.width : item.width + ARRANGE_GAP_PX;
+      if (currentRow.length >= perRow || currentWidth + extra > availableWidth) {
+        rows.push(currentRow);
+        currentRow = [];
+        currentWidth = 0;
+      }
+
+      currentWidth += currentRow.length === 0 ? item.width : item.width + ARRANGE_GAP_PX;
+      currentRow.push(item);
+    }
+    if (currentRow.length > 0) rows.push(currentRow);
+
+    const rowMetrics = rows.map((row) => ({
+      row,
+      width: row.reduce((sum, item) => sum + item.width, 0) + ARRANGE_GAP_PX * (row.length - 1),
+      height: Math.max(...row.map((item) => item.height)),
+    }));
+
+    const totalWidth = Math.max(...rowMetrics.map((metrics) => metrics.width));
+    const placed: Array<(typeof items)[number] & { x: number; y: number }> = [];
+    let cursorY = 0;
+
+    for (const metrics of rowMetrics) {
+      let cursorX = (totalWidth - metrics.width) / 2;
+
+      for (const item of metrics.row) {
+        placed.push({
+          ...item,
+          x: cursorX,
+          y: cursorY + (metrics.height - item.height) / 2,
+        });
+        cursorX += item.width + ARRANGE_GAP_PX;
+      }
+
+      cursorY += metrics.height + ARRANGE_GAP_PX;
+    }
+
+    return {
+      scale,
+      placed,
+      totalWidth,
+      totalHeight: Math.max(cursorY - ARRANGE_GAP_PX, 1),
+      availableWidth,
+      availableHeight,
+    };
+  };
+
+  let result = layout();
+  if (!result) return false;
+
+  // Only shrink when the packed block cannot fit the viewport at this zoom.
+  if (result.totalWidth > result.availableWidth || result.totalHeight > result.availableHeight) {
+    const factor = Math.min(
+      result.availableWidth / result.totalWidth,
+      result.availableHeight / result.totalHeight,
+    );
+
+    if (factor < 0.98) {
+      const currentZoom = editor.getCurrZoom?.() ?? 1;
+      editor.zoomTo?.(Math.max(0.25, currentZoom * factor));
+      board.clearPendingRestores();
+      result = layout() ?? result;
+    }
+  }
+
+  const blockCenter = { x: result.totalWidth / 2, y: result.totalHeight / 2 };
+  const space = editor.getChemSpace?.();
+
+  space?.beginUpdate?.();
+  try {
+    for (const item of result.placed) {
+      const targetX = viewCenter.x + (item.x + item.width / 2 - blockCenter.x) / result.scale;
+      const targetY = viewCenter.y - (item.y + item.height / 2 - blockCenter.y) / result.scale;
+      const deltaX = targetX - item.centerX;
+      const deltaY = targetY - item.centerY;
+
+      for (const node of item.unit.nodes) {
+        const coord = node.getCoord2D?.(true);
+        if (!coord) continue;
+
+        node.setCoord2D?.({ x: coord.x + deltaX, y: coord.y + deltaY });
+      }
+    }
+  } finally {
+    space?.endUpdate?.();
+  }
 
   return true;
 }
@@ -539,8 +820,16 @@ export function createEditorBridge(
         space?.endUpdate?.();
       }
 
-      // Deliberately keep the current zoom and scroll position.
+      // Cleaning never enlarges the drawing: the zoom stays put and the
+      // structures themselves are moved into a tidy block in the middle of the
+      // view. A single structure that is already on screen is left untouched.
       repaint();
+
+      if (arrangeFragments(K, composer, editor, board)) {
+        repaint();
+        board.notifyContentChanged();
+      }
+
       return molecules.length;
     },
     clear() {

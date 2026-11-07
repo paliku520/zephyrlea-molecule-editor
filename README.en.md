@@ -26,7 +26,7 @@ npm run preview
 - Single / double / triple / solid wedge / hashed wedge / dative / wavy bonds, positive/negative charges (drawn as circled +/− badges), element stamps, R-group and ring templates.
 - SMILES export through `Kekule.IO.saveFormatData(model, 'smi')`, stored in React state and copied to the clipboard.
 - SMILES import with high-quality 2D coordinates, plus **Clean Up** (OpenChemLib is lazy-loaded as a helper because Kekule 1.0.4 ships a SMILES writer but no SMILES reader/layout engine).
-- Clean Up only re-lays out coordinates: the current zoom, scroll position and bond length are preserved, so the drawing never jumps or grows.
+- Clean Up re-lays out coordinates and **moves** the scattered structures to the middle of the screen: they are packed into tidy rows (top-to-bottom, left-to-right, rows balanced and vertically centred, even spacing) around the current viewport centre. The zoom level is kept; it only shrinks when the packed block cannot fit. A single structure that is already on screen is never moved, only its bond geometry is fixed.
 - Open `.mol`, `.sdf`, `.cml`, `.rxn`, `.kcj`, `.json` and `.smi` files.
 - Undo / redo, zoom, reset zoom, clear, keyboard shortcuts.
 - A practically endless canvas: the drawing surface is far larger than the viewport, and panning near its border silently moves the whole drawing back to the middle, so you can keep panning in any direction while nothing is ever drawn outside the canvas.
