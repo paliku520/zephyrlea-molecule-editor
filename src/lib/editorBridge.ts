@@ -515,22 +515,42 @@ function applyUiMarkerTheme(composer: any) {
   if (!markers) return;
 
   const accent = getThemeAccent();
+  const accentStrong = getThemeAccentStrong();
   markers.setHotTrackerColor?.(accent);
   markers.setHotTrackerOpacity?.(0.3);
   markers.setSelectionMarkerStrokeColor?.(accent);
   markers.setSelectionMarkerFillColor?.(accent);
   markers.setSelectionMarkerOpacity?.(0.2);
+
+  // The marquee defaults to a 1px black dashed outline, invisible on the dark
+  // canvas. The marker opacity multiplies the stroke too, so it stays high and
+  // the fill is left empty to keep the dashed edge crisp.
+  markers.setSelectingMarkerStrokeColor?.(accentStrong);
+  markers.setSelectingMarkerStrokeWidth?.(2);
+  markers.setSelectingMarkerStrokeDash?.(true);
+  markers.setSelectingMarkerFillColor?.(null);
+  markers.setSelectingMarkerOpacity?.(0.95);
+  markers.setSelectingBrushMarkerStrokeColor?.(accentStrong);
+  markers.setSelectingBrushMarkerStrokeDash?.(true);
+  markers.setSelectingBrushMarkerOpacity?.(0.95);
 }
 
-function getThemeAccent() {
-  const fallback = '#89b5fa';
+function readThemeToken(name: string, fallback: string) {
   if (typeof window === 'undefined') return fallback;
 
   const value = getComputedStyle(document.documentElement)
-    .getPropertyValue('--color-accent')
+    .getPropertyValue(name)
     .trim();
 
   return value || fallback;
+}
+
+function getThemeAccent() {
+  return readThemeToken('--color-accent', '#89b5fa');
+}
+
+function getThemeAccentStrong() {
+  return readThemeToken('--color-accent-strong', '#a8c7fc');
 }
 
 function activateBondTool(
