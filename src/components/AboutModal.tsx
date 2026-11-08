@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, Cpu, ExternalLink, FileText, Scale, User, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, Cpu, ExternalLink, FileText, Scale, Sparkles, User, X } from 'lucide-react';
 import licenseText from '../../LICENSE?raw';
-import { REPO_URL } from '../lib/site';
+import { REPO_URL, DOCS_URL } from '../lib/site';
 import { GitHubMark } from './icons/GitHubMark';
 
 interface AboutModalProps {
@@ -11,13 +11,21 @@ interface AboutModalProps {
 
 const TECH_STACK: { name: string; role: string }[] = [
   { name: 'React 19 · TypeScript', role: '界面与交互' },
-  { name: 'Vite', role: '构建与开发服务器' },
+  { name: 'Vite', role: '构建与静态部署' },
   { name: 'Tailwind CSS 4', role: '主题与布局' },
-  { name: 'Kekule.js 1.0.4', role: '2D 绘图内核' },
+  { name: 'Kekule.js 1.0.4', role: '2D 绘图与图片渲染' },
   { name: 'RDKit.js（WASM）', role: '分子分析与价键校验' },
   { name: 'OpenChemLib', role: '2D 坐标生成' },
   { name: 'sci-form-wasm', role: '3D 构象生成' },
   { name: '3Dmol.js', role: '三维渲染' },
+];
+
+/** Short capability list: the things a new user should know it can do. */
+const HIGHLIGHTS: { title: string; detail: string }[] = [
+  { title: '绘制', detail: '元素、键型、电荷、R 基团与环模板' },
+  { title: '分析', detail: '分子式、描述符与价键校验，实时更新' },
+  { title: '导出', detail: 'SMILES 文本、透明背景 PNG / SVG' },
+  { title: '三维', detail: '本地生成构象，可旋转、截图' },
 ];
 
 function SectionLabel({ icon: Icon, children }: { icon: typeof Cpu; children: ReactNode }) {
@@ -136,8 +144,20 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
               一个轻量化的小分子结构编辑器，基于 Kekule.js
               构建，专为中学化学的课堂演示、练习与作业设计。
               点选元素与键型即可逐笔搭建结构，也支持 SMILES 导入导出、结构整理、RDKit
-              分子分析与价键校验，并能随时切换到 3D 构象查看——全部计算都在浏览器本地完成。
+              分子分析与价键校验，并能随时切换到 3D 构象查看——全部计算都在浏览器本地完成，无需安装、不上传数据。
             </p>
+
+            <section>
+              <SectionLabel icon={Sparkles}>主要能力</SectionLabel>
+              <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                {HIGHLIGHTS.map((item) => (
+                  <li key={item.title} className="rounded-md border border-line bg-canvas px-2.5 py-1.5">
+                    <p className="text-[11.5px] font-semibold text-ink-soft">{item.title}</p>
+                    <p className="mt-0.5 text-[10.5px] leading-4 text-ink-faint">{item.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
             <section>
               <SectionLabel icon={Cpu}>核心技术栈</SectionLabel>
@@ -179,16 +199,28 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
         )}
 
         <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
-          <a
-            href={REPO_URL}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex h-8 min-w-0 items-center gap-2 rounded-md px-1.5 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            <GitHubMark className="h-[15px] w-[15px] shrink-0" />
-            <span className="truncate">paliku520/zephyrlea-molecule-editor</span>
-            <ExternalLink size={12} strokeWidth={1.8} className="shrink-0 opacity-70" />
-          </a>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex h-7 min-w-0 items-center gap-2 rounded-md px-1.5 text-[11.5px] font-medium text-accent transition-colors hover:text-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <GitHubMark className="h-[15px] w-[15px] shrink-0" />
+              <span className="truncate">paliku520/zephyrlea-molecule-editor</span>
+              <ExternalLink size={12} strokeWidth={1.8} className="shrink-0 opacity-70" />
+            </a>
+            <a
+              href={DOCS_URL}
+              target="_blank"
+              rel="noreferrer noopener"
+              title="使用说明、实现细节与部署 / 托管教程"
+              className="inline-flex h-7 min-w-0 items-center gap-2 rounded-md px-1.5 text-[11.5px] font-medium text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <BookOpen size={13.5} strokeWidth={1.9} className="shrink-0" />
+              <span className="truncate">使用说明与部署教程</span>
+            </a>
+          </div>
           <button
             type="button"
             onClick={onClose}

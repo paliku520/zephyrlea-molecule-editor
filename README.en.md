@@ -1,8 +1,6 @@
 # Zephyrlea · Molecule Editor
 
-A dark, canvas-first molecule editor shell built with **React 19 + Tailwind CSS 4** and **Kekule.js 1.0.4**.
-
-This is the first delivery: the full editor layout, a live Kekule composer, working drawing tools, SMILES import/export, Clean Up and a fully local 3D preview.
+A lightweight small-molecule structure editor for secondary-school chemistry, built with **React 19 + Tailwind CSS 4** and **Kekule.js 1.0.4**. Draw structures click by click, paste SMILES, let RDKit check valences live, switch to a 3D conformer, and export SMILES text or transparent PNG / SVG images — everything runs in the browser, with no backend at all.
 
 ## Run
 
@@ -23,7 +21,7 @@ npm run preview
 - Full-bleed Kekule `Composer` mounted from React with all native Kekule toolbars hidden.
 - Custom React/Tailwind top bar, element strip and vertical tool rail.
 - **Header**: a slim band pinned to the very top holds the product name `ZephyrLea's Molecular Editor`, an **About** button right next to it, and a **GitHub** button on the right that opens the `paliku520/zephyrlea-molecule-editor` repository in a new tab. It stays at the top whatever the toolbar position (top / bottom) is set to.
-- **About dialog**: the About button opens a modal with the pitch, the core tech stack, the MIT license and the author. **View full license** renders the bundled `LICENSE` text inside the dialog, so the license can be read right in the web page without leaving the app; `Esc`, the backdrop and the Close button dismiss it, and the footer links to the GitHub repository.
+- **About dialog**: the About button opens a modal with the pitch, the **key capabilities** (draw / analyse / export / 3D), the core tech stack, the MIT license and the author. **View full license** renders the bundled `LICENSE` text inside the dialog, so the license can be read right in the web page without leaving the app; `Esc`, the backdrop and the Close button dismiss it, and the footer links to both the GitHub repository and the **usage & hosting guide** (the README deployment section).
 - Tool switching through Kekule's interaction-controller API (`MolBondIaController`, `MolRingIaController`, `MolNodeChargeIaController`, `SelectIaController`, …).
 - Single / double / triple / solid wedge / hashed wedge / dative / wavy bonds, positive/negative charges (drawn as circled +/− badges), element stamps, R-group and ring templates.
 - Element tools both insert and replace: after picking an element, clicking empty canvas inserts a new atom, while clicking an existing atom **replaces its element in place** (bonds and neighbours untouched, undoable).
@@ -60,7 +58,7 @@ npm run preview
 public/vendor/kekule/       Vendored Kekule.js 1.0.4 dist bundle + theme CSS (MIT)
 src/components/             React shell: top bar, tool rail, element strip, editor
 src/components/AppHeader.tsx  Header: title, About entry and GitHub link
-src/components/AboutModal.tsx About dialog: pitch, tech stack, full MIT license, author (`LICENSE?raw` inlined)
+src/components/AboutModal.tsx About dialog: pitch, capabilities, tech stack, full MIT license, author (`LICENSE?raw` inlined)
 src/components/icons/       Custom SVG chemistry icons
 src/lib/editorBridge.ts     Kekule composer lifecycle, tools, SMILES I/O, fit-to-view
 src/lib/editorBoard.ts      Surface sizing, endless panning (content re-anchor) and zoom re-centering
@@ -72,7 +70,7 @@ src/lib/periodicTable.ts    Element symbols and the standard long-form layout (1
 src/components/PeriodicTableModal.tsx  Hand-drawn periodic table dialog shared by the strip and the label box
 src/lib/elementColors.ts    Dark and light element palettes (shell + canvas)
 src/lib/settings.ts         Settings model, localStorage persistence, theme application
-src/lib/site.ts             Shared repository link (header + about dialog)
+src/lib/site.ts             Shared repository link and docs entry (header + about dialog)
 src/lib/boardPersistence.ts Board auto-save / restore (molblocks, atom coords, zoom and viewport)
 src/lib/rdkit.ts  RDKit WASM loader, formula / descriptor analysis, chemistry-problem detection, dev self-test
 src/lib/structureValidation.ts  Analysis + validation model, valence classification, Chinese copy
@@ -157,6 +155,15 @@ src/index.css               Tailwind entry + Kekule dark-shell overrides
 - `Ctrl/⌘ + Z` — undo
 - `Ctrl/⌘ + Shift + Z` — redo
 - `Enter` — load the SMILES in the top bar
+
+## Deploying
+
+The build output is a static site (`dist/`) with no backend: run `npm run build` and hand `dist/` to any static host. The first visit downloads about 16 MB of WebAssembly (RDKit plus the 3D conformer engine) on demand; everything else runs locally and no external API is called.
+
+- **Vercel / Netlify / Cloudflare Pages**: import the repository, use `npm run build` as the build command and `dist` as the output directory, keep the remaining defaults — nothing else is needed when the site is served at the domain root.
+- **GitHub Pages**: set Settings → Pages → Source to **GitHub Actions** and build/upload `dist` with the official Pages template. A project site is served from `/<repo>/`, so build with the path: `npm run build -- --base=/zephyrlea-molecule-editor/` (custom domains and user sites keep the default `--base=/`). Manually pushing `dist/` to a `gh-pages` branch works too.
+- **Self-hosted**: `npm run build -- --base=/molecule/`, copy `dist/` into that sub-directory, serve `.wasm` as `application/wasm` and enable gzip / Brotli.
+- Notes: the clipboard API needs HTTPS (or localhost); the saved board lives in `localStorage` and is per-origin; there is no client-side router, so no `404.html` fallback is required.
 
 ## License
 

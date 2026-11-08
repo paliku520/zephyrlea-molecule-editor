@@ -1,10 +1,8 @@
 # Zephyrlea · 分子结构编辑器
 
-一个以画布为核心的暗色分子编辑器外壳，基于 **React 19 + Tailwind CSS 4** 与 **Kekule.js 1.0.4** 构建。
+一个面向中学化学的轻量化小分子结构编辑器，基于 **React 19 + Tailwind CSS 4** 与 **Kekule.js 1.0.4** 构建。逐笔绘制结构、粘贴 SMILES、RDKit 实时分析价键、切到 3D 查看构象，并能导出 SMILES 文本、透明背景的 PNG / SVG 图片 —— 全部计算都在浏览器本地完成，没有后端。
 
 [English](./README.en.md)
-
-本次为第一阶段交付：完整的编辑器布局、可用的 Kekule 编辑器实例、绘制工具、SMILES 导入/导出、结构整理与本地 3D 构象预览。
 
 ## 快速开始
 
@@ -25,7 +23,7 @@ npm run preview
 - 由 React 挂载的全屏 Kekule `Composer`，并隐藏 Kekule 自带的全部工具栏。
 - 使用 React + Tailwind 自绘顶栏、元素快捷条与左侧垂直工具栏。
 - **页眉**：最上方是一条固定页眉，左侧是产品名 `ZephyrLea's Molecular Editor` 与紧邻的「关于」按钮，右侧是跳转 GitHub 仓库（`paliku520/zephyrlea-molecule-editor`，新标签页打开）的按钮；页眉常驻顶部，不受工具栏「顶部 / 底部」设置影响。
-- **关于窗口**：「关于」按钮打开关于弹窗，内容包括产品简介、核心技术栈、MIT 开源协议（点「查看完整协议」可在页面内直接阅读 `LICENSE` 全文，无需跳转）与作者信息，底部附 GitHub 仓库链接；`Esc`、遮罩与「关闭」都能关掉它。
+- **关于窗口**：「关于」按钮打开关于弹窗，内容包括产品简介、**主要能力**（绘制 / 分析 / 导出 / 三维）、核心技术栈、MIT 开源协议（点「查看完整协议」可在页面内直接阅读 `LICENSE` 全文，无需跳转）与作者信息；底部除了 GitHub 仓库链接，还提供「使用说明与部署教程」入口。`Esc`、遮罩与「关闭」都能关掉它。
 - 通过 Kekule 的交互控制器 API 切换绘制模式（`MolBondIaController`、`MolRingIaController`、`MolNodeChargeIaController`、`SelectIaController` 等），而不是重新实现绘图逻辑。
 - 单键 / 双键 / 三键 / 楔形键（向上）/ 虚楔键（向下）/ 配位键 / 未知立体键、正负电荷（圆圈内加减号图标）、元素原子、R 基团以及各类环模板。
 - 元素工具既能插入也能替换：选中元素后点击空白处插入新原子，点击画布上已有的原子则**就地替换该原子的元素**（化学键与相邻原子保持不变，可撤销）。
@@ -74,7 +72,7 @@ src/lib/periodicTable.ts    元素周期表的符号表与标准长式布局（1
 src/components/PeriodicTableModal.tsx  自绘元素周期表弹窗（元素条与双击标签框共用）
 src/lib/elementColors.ts    深色 / 浅色两套元素配色（界面与画布共用）
 src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
-src/lib/site.ts             页眉与关于弹窗共用的仓库链接
+src/lib/site.ts             页眉与关于弹窗共用的仓库链接、文档入口
 src/lib/boardPersistence.ts 画板自动保存 / 恢复（结构 molblock、原子坐标、缩放与视口位置）
 src/lib/rdkit.ts            RDKit WASM 加载、分子式 / 描述符分析、化学问题检测与开发模式自检入口
 src/lib/structureValidation.ts  分析 + 校验结果模型、价键错误归类与中文说明
@@ -159,6 +157,15 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - `Ctrl/⌘ + Z` —— 撤销
 - `Ctrl/⌘ + Shift + Z` —— 重做
 - `Enter` —— 载入顶栏中的 SMILES
+
+## 部署与托管
+
+构建产物是纯静态站点（`dist/`），没有后端：`npm run build` 之后把 `dist/` 交给任意静态托管即可。首次打开会按需下载约 16 MB 的 WebAssembly（RDKit + 三维构象引擎），其余全部在本地运行，不访问任何外部接口。
+
+- **Vercel / Netlify / Cloudflare Pages**：导入仓库，构建命令 `npm run build`，输出目录 `dist`，其余保持默认；部署在域名根目录时无需额外配置。
+- **GitHub Pages**：Settings → Pages → Source 选 **GitHub Actions**，用官方 Pages 模板构建并上传 `dist`。项目站点挂在 `/<仓库名>/` 下，所以构建要带路径：`npm run build -- --base=/zephyrlea-molecule-editor/`（自定义域名或用户主页站点用默认的 `--base=/`）。也可以手动构建后把 `dist/` 推到 `gh-pages` 分支。
+- **自建服务器**：`npm run build -- --base=/molecule/`，把 `dist/` 放进对应子目录，并让 `.wasm` 以 `application/wasm` 返回、开启 gzip / Brotli。
+- 注意：剪贴板 API 需要 HTTPS（或 localhost）；画板存档在浏览器 `localStorage` 中、按域名隔离；没有前端路由，因此不需要 `404.html` 回退。
 
 ## 开源协议
 
