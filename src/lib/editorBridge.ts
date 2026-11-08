@@ -5,11 +5,11 @@ import {
   type BoardPersistence,
 } from './boardPersistence';
 import { ATOMIC_NUMBER_LIMIT, getDefaultElementColor, getElementColors } from './elementColors';
-import { installGroupNameTranslations } from './groupNames';
 import type { KekuleNamespace } from './kekule';
 import { installBondLineStyle } from './kekuleBondStyle';
 import { installElectronStateLabels } from './kekuleElectronLabel';
 import { installLabelBaseline } from './kekuleLabelStyle';
+import { installAtomOnlyNodePicker, installNodeSetter } from './kekuleNodeSetter';
 import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
 import { DEFAULT_SETTINGS, type AppSettings, type ThemeMode } from './settings';
@@ -1055,6 +1055,9 @@ function applyTool(K: KekuleNamespace, composer: any, tool: ToolId): boolean {
  * Kekule inserts the predefined substituents of its picker as condensed groups
  * (a `SubGroup` drawn as its abbreviation such as "Ph"). Expand them so the
  * canvas shows the real structure and the atoms stay editable.
+ *
+ * An R group is a `SubGroup` too, but without any child structure: expanding it
+ * would replace its "R" label with an empty group, i.e. make it disappear.
  */
 function expandCollapsedGroups(K: KekuleNamespace, composer: any) {
   let expanded = false;
@@ -1062,7 +1065,9 @@ function expandCollapsedGroups(K: KekuleNamespace, composer: any) {
   const visit = (obj: any) => {
     if (!obj) return;
 
-    if (obj instanceof K.SubGroup && obj.isExpanded?.() === false) {
+    const expandable =
+      obj instanceof K.SubGroup && (obj.getNodeCount?.() ?? 0) > 0;
+    if (expandable && obj.isExpanded?.() === false) {
       obj.setExpanded?.(true);
       expanded = true;
     }
@@ -1086,6 +1091,8 @@ export function createEditorBridge(
   installLabelBaseline(K);
   installElectronStateLabels(K);
   installDoubleClickGuard(K);
+  installNodeSetter(K);
+  installAtomOnlyNodePicker(K);
 
   let destroyed = false;
   const composer = new K.Editor.Composer(host);
@@ -1120,7 +1127,6 @@ export function createEditorBridge(
   persistence = installBoardPersistence(K, composer, editor, board);
 
   installElementReplace(K, editor);
-  installGroupNameTranslations(K);
 
   const repaint = () => {
     composer.requestRepaint?.();
