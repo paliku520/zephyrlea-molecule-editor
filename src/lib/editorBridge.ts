@@ -1,5 +1,5 @@
 import type { EditorBoard } from './editorBoard';
-import { createEditorBoard } from './editorBoard';
+import { createEditorBoard, MIN_ZOOM } from './editorBoard';
 import { ATOMIC_NUMBER_LIMIT, getDefaultElementColor, getElementColors } from './elementColors';
 import { installGroupNameTranslations } from './groupNames';
 import type { KekuleNamespace } from './kekule';
@@ -36,6 +36,7 @@ export type ToolId =
 export interface EditorBridgeCallbacks {
   onContentChange?: (hasContent: boolean) => void;
   onSelectionChange?: (selection: SelectionSnapshot | null) => void;
+  onZoomChange?: (zoom: number) => void;
 }
 
 /** Selection state used by the floating transform bar. */
@@ -398,7 +399,7 @@ function arrangeFragments(
 
     if (factor < 0.98) {
       const currentZoom = editor.getCurrZoom?.() ?? 1;
-      editor.zoomTo?.(Math.max(0.25, currentZoom * factor));
+      editor.zoomTo?.(Math.max(MIN_ZOOM, currentZoom * factor));
       board.clearPendingRestores();
       result = layout() ?? result;
     }
@@ -1048,7 +1049,9 @@ export function createEditorBridge(
   applyUiMarkerTheme(composer);
 
   const editor = composer.getEditor();
-  const board = createEditorBoard(K, composer);
+  const board = createEditorBoard(K, composer, {
+    onZoomChange: (zoom) => callbacks.onZoomChange?.(zoom),
+  });
 
   installElementReplace(K, editor);
   installGroupNameTranslations(K);
@@ -1386,6 +1389,7 @@ export function createEditorBridge(
     repaint();
     board.centerEmptyView();
     callbacks.onContentChange?.(hasContent());
+    callbacks.onZoomChange?.(editor.getCurrZoom?.() ?? 1);
   });
 
   return bridge;

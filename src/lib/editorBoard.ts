@@ -28,6 +28,22 @@ const CONTENT_FIT_DELAY_MS = 260;
 /** Scroll events caused by our own layout work are ignored for this long. */
 const LAYOUT_SETTLE_MS = 160;
 
+/**
+ * Zoom is a multiplier of the default bond screen length. Kekule itself has no
+ * bounds, so repeated clicks (or a pinch gesture) could shrink the drawing into
+ * a speck or blow single bonds up past a screen; the editor clamps here, which
+ * also covers Kekule's own double-click / wheel / gesture zoom paths.
+ */
+export const MIN_ZOOM = 0.4;
+export const MAX_ZOOM = 4;
+/** Zoom differences below this are treated as "no change". */
+const ZOOM_EPSILON = 1e-4;
+
+export interface EditorBoardOptions {
+  /** Called whenever the effective zoom changes (or is pinned at a bound). */
+  onZoomChange?: (zoom: number) => void;
+}
+
 export interface EditorBoard {
   rebalance(options?: { preserveViewCenter?: boolean }): void;
   centerView(): void;
@@ -38,7 +54,11 @@ export interface EditorBoard {
   dispose(): void;
 }
 
-export function createEditorBoard(K: KekuleNamespace, composer: any): EditorBoard {
+export function createEditorBoard(
+  K: KekuleNamespace,
+  composer: any,
+  options: EditorBoardOptions = {},
+): EditorBoard {
   const editor = composer.getEditor?.();
   let disposed = false;
   let scrollFrame = 0;
@@ -416,7 +436,24 @@ export function createEditorBoard(K: KekuleNamespace, composer: any): EditorBoar
   const originalZoomTo = editor?.zoomTo?.bind(editor);
   if (originalZoomTo) {
     editor.zoomTo = (...args: any[]) => {
-      const result = originalZoomTo(...args);
+      const requested = Number(args[0]);
+      const current = editor.getCurrZoom?.() || 1;
+
+      if (!Number.isFinite(requested)) {
+        return originalZoomTo(...args);
+      }
+
+      const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, requested));
+
+      // Pinned at a bound: skip the (expensive) layout passes so repeated
+      // clicks cannot queue settle work or nudge the view.
+      if (Math.abs(target - current) < ZOOM_EPSILON) {
+        options.onZoomChange?.(current);
+        return editor;
+      }
+
+      const result = originalZoomTo(target, ...args.slice(1));
+      options.onZoomChange?.(target);
 
       // Remember what the middle of the viewport was pointing at, so the
       // delayed passes below can put it back exactly where it was.

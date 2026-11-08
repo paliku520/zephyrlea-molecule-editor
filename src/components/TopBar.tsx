@@ -1,9 +1,11 @@
 import { useRef } from 'react';
 import { Box, Download, FileUp, Keyboard, Redo2, Scan, Settings, Trash2, Undo2, Wand2, ZoomIn, ZoomOut } from 'lucide-react';
 import { IconButton } from './ui/IconButton';
+import { MAX_ZOOM, MIN_ZOOM } from '../lib/editorBoard';
 
 interface TopBarProps {
   ready: boolean;
+  zoom: number;
   smiles: string;
   onSmilesChange: (value: string) => void;
   onSubmitSmiles: () => void;
@@ -23,6 +25,7 @@ interface TopBarProps {
 
 export function TopBar({
   ready,
+  zoom,
   smiles,
   onSmilesChange,
   onSubmitSmiles,
@@ -40,6 +43,8 @@ export function TopBar({
   onSettings,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const atMinZoom = zoom <= MIN_ZOOM + 1e-3;
+  const atMaxZoom = zoom >= MAX_ZOOM - 1e-3;
 
   return (
     <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-line bg-panel px-3">
@@ -113,10 +118,10 @@ export function TopBar({
           <span className="hidden xl:inline">整理</span>
         </button>
 
-        <IconButton label="放大" onClick={onZoomIn} disabled={!ready}>
+        <IconButton label="放大" onClick={onZoomIn} disabled={!ready || atMaxZoom}>
           <ZoomIn size={17} strokeWidth={1.7} />
         </IconButton>
-        <IconButton label="缩小" onClick={onZoomOut} disabled={!ready}>
+        <IconButton label="缩小" onClick={onZoomOut} disabled={!ready || atMinZoom}>
           <ZoomOut size={17} strokeWidth={1.7} />
         </IconButton>
         <IconButton label="适应画布 / 重置缩放" onClick={onResetZoom} disabled={!ready}>

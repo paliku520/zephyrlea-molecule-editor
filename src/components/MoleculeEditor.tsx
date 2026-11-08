@@ -45,6 +45,7 @@ export function MoleculeEditor() {
   const [hasContent, setHasContent] = useState(false);
   const [selection, setSelection] = useState<SelectionSnapshot | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -94,6 +95,7 @@ export function MoleculeEditor() {
           {
             onContentChange: (nextHasContent) => setHasContent(nextHasContent),
             onSelectionChange: setSelection,
+            onZoomChange: setZoom,
           },
           settingsRef.current,
         );
@@ -301,6 +303,7 @@ export function MoleculeEditor() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-canvas text-ink antialiased">
       <TopBar
         ready={ready}
+        zoom={zoom}
         smiles={smilesInput}
         onSmilesChange={setSmilesInput}
         onSubmitSmiles={() => void handleLoadSmiles()}
