@@ -105,8 +105,15 @@ export function Viewer3DModal({ open, smiles, theme, onClose }: Viewer3DModalPro
         });
 
         viewerRef.current = viewer;
-        viewer.addModel(result.xyz, 'xyz');
-        viewer.setStyle({}, { stick: {}, sphere: { scale: 0.3 } });
+        viewer.addModel(result.molblock, 'sdf');
+        viewer.setStyle({}, {
+          stick: {
+            radius: 0.15,
+            doubleBondScaling: 0.55,
+            tripleBondScaling: 0.45,
+          },
+          sphere: { scale: 0.3 },
+        });
         viewer.zoomTo();
         viewer.render();
 
@@ -177,7 +184,7 @@ export function Viewer3DModal({ open, smiles, theme, onClose }: Viewer3DModalPro
           <div className="flex shrink-0 items-center gap-3">
             {conformer && (
               <span className="hidden text-[11px] text-ink-faint sm:inline">
-                {conformer.atomCount} 个原子
+                {conformer.atomCount} 个原子 · {conformer.bondCount} 根键
               </span>
             )}
             <button
