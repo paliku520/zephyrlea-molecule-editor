@@ -49,7 +49,7 @@ export function TripleBondIcon(props: ChemIconProps) {
 export function WedgeBondIcon(props: ChemIconProps) {
   return (
     <ChemSvg {...props}>
-      <path d="M4.6 19.8 9.9 20.7 20.4 4.6Z" fill="currentColor" stroke="none" />
+      <path d="M5 19 17.6 10.9 13.1 6.4Z" fill="currentColor" stroke="none" />
     </ChemSvg>
   );
 }
@@ -58,12 +58,12 @@ export function WedgeBondIcon(props: ChemIconProps) {
 export function HashedWedgeBondIcon(props: ChemIconProps) {
   return (
     <ChemSvg {...props}>
-      <path d="M2.9 13.4 10.6 21.1" strokeWidth={1.6} />
-      <path d="M5.8 11.8 12.2 18.2" strokeWidth={1.5} />
-      <path d="M8.7 10.2 13.8 15.3" strokeWidth={1.4} />
-      <path d="M11.6 8.6 15.4 12.4" strokeWidth={1.3} />
-      <path d="M14.4 6.9 17.1 9.6" strokeWidth={1.2} />
-      <path d="M16.7 5.7 18.3 7.3" strokeWidth={1.1} />
+      <path d="M7.1 15.7 8.3 16.9" strokeWidth={1.4} />
+      <path d="M8.3 13.8 10.2 15.7" strokeWidth={1.4} />
+      <path d="M9.5 11.9 12.1 14.5" strokeWidth={1.4} />
+      <path d="M10.7 10 14 13.3" strokeWidth={1.4} />
+      <path d="M12 8.1 15.9 12" strokeWidth={1.4} />
+      <path d="M13.1 6.4 17.6 10.9" strokeWidth={1.4} />
     </ChemSvg>
   );
 }
@@ -149,7 +149,7 @@ export function CyclohexaneIcon(props: ChemIconProps) {
 export function CycloheptaneIcon(props: ChemIconProps) {
   return (
     <ChemSvg {...props}>
-      <circle cx="12" cy="12" r="8.2" />
+      <path d="M12 2.7 19.3 6.2 21.1 14.1 16 20.4 8 20.4 2.9 14.1 4.7 6.2Z" />
     </ChemSvg>
   );
 }
@@ -157,7 +157,7 @@ export function CycloheptaneIcon(props: ChemIconProps) {
 export function CyclooctaneIcon(props: ChemIconProps) {
   return (
     <ChemSvg {...props}>
-      <circle cx="12" cy="12" r="8.2" />
+      <path d="M15.6 3.4 20.6 8.4v7.2l-5 5H8.4l-5-5V8.4l5-5Z" />
     </ChemSvg>
   );
 }

@@ -64,19 +64,19 @@ const TOOL_GROUPS: ToolDefinition[][] = [
     { tool: 'chargeMinus', label: '加负电荷', icon: <NegativeChargeIcon width={19} height={19} /> },
   ],
   [
-    { tool: 'benzene', label: '苯环', icon: <BenzeneIcon width={19} height={19} /> },
-    { tool: 'ring3', label: '环丙烷', icon: <CyclopropaneIcon width={19} height={19} /> },
+    { tool: 'benzene', label: '苯环', icon: <BenzeneIcon width={22} height={22} /> },
+    { tool: 'ring3', label: '环丙烷', icon: <CyclopropaneIcon width={22} height={22} /> },
   ],
   [
-    { tool: 'ring4', label: '环丁烷', icon: <CyclobutaneIcon width={19} height={19} /> },
-    { tool: 'ring5', label: '环戊烷', icon: <CyclopentaneIcon width={19} height={19} /> },
+    { tool: 'ring4', label: '环丁烷', icon: <CyclobutaneIcon width={22} height={22} /> },
+    { tool: 'ring5', label: '环戊烷', icon: <CyclopentaneIcon width={22} height={22} /> },
   ],
   [
-    { tool: 'ring6', label: '环己烷', icon: <CyclohexaneIcon width={19} height={19} /> },
-    { tool: 'ring7', label: '环庚烷', icon: <CycloheptaneIcon width={19} height={19} /> },
+    { tool: 'ring6', label: '环己烷', icon: <CyclohexaneIcon width={22} height={22} /> },
+    { tool: 'ring7', label: '环庚烷', icon: <CycloheptaneIcon width={22} height={22} /> },
   ],
   [
-    { tool: 'ring8', label: '环辛烷', icon: <CyclooctaneIcon width={19} height={19} /> },
+    { tool: 'ring8', label: '环辛烷', icon: <CyclooctaneIcon width={22} height={22} /> },
   ],
 ];
 
