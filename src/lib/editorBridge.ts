@@ -4,6 +4,7 @@ import { ATOMIC_NUMBER_LIMIT, DEFAULT_ELEMENT_COLOR, ELEMENT_COLORS } from './el
 import { installGroupNameTranslations } from './groupNames';
 import type { KekuleNamespace } from './kekule';
 import { installBondLineStyle } from './kekuleBondStyle';
+import { installElectronStateLabels } from './kekuleElectronLabel';
 import { installLabelBaseline } from './kekuleLabelStyle';
 import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
@@ -779,6 +780,28 @@ const CLICK_SELECT_TOLERANCE_PX = 4;
 const DOUBLE_CLICK_INTERVAL_MS = 400;
 
 /**
+ * Kekule opens the inline atom/label setter on every double click, whoever the
+ * active tool is. With a tool that acts on every click (charge, element, bond,
+ * eraser) two quick clicks on the same atom are a legitimate way to repeat the
+ * action, so the setter would pop up over the canvas instead. Keep the gesture
+ * for the select/lasso tool only.
+ */
+function installDoubleClickGuard(K: KekuleNamespace) {
+  const proto = K.Editor?.BaseEditorIaController?.prototype;
+  if (!proto || proto.__zephyrleaDblClickGuard) return;
+
+  const reactDblClick = proto.react_dblclick;
+  if (typeof reactDblClick !== 'function') return;
+
+  proto.__zephyrleaDblClickGuard = true;
+  proto.react_dblclick = function patchedReactDblClick(event: any) {
+    const activeId = this.getEditor?.()?.getActiveIaControllerId?.();
+    if (activeId !== 'SelectIaController') return false;
+    return reactDblClick.call(this, event);
+  };
+}
+
+/**
  * Kekule's select controller only listens to marquee drags, so a plain click
  * never selects a single atom or bond. Add that pointer behaviour while the
  * select/lasso tool is active.
@@ -967,6 +990,8 @@ export function createEditorBridge(
   applyDarkRenderTheme(K);
   installBondLineStyle(K);
   installLabelBaseline(K);
+  installElectronStateLabels(K);
+  installDoubleClickGuard(K);
 
   let destroyed = false;
   const composer = new K.Editor.Composer(host);
