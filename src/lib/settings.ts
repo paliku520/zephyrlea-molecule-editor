@@ -5,6 +5,8 @@ export type ToolbarPlacement = 'top' | 'bottom';
 export type Model3DStyle = 'ball-stick' | 'space-fill' | 'stick' | 'wireframe';
 /** Where the 3D viewer's bottom toolbar sits. */
 export type Viewer3DToolbarAlign = 'left' | 'center' | 'right';
+/** What a drag inside the 3D canvas does. */
+export type Viewer3DDragMode = 'rotate' | 'pan';
 
 export const VIEWER_3D_TOOLBAR_OPTIONS: {
   value: Viewer3DToolbarAlign;
@@ -25,6 +27,15 @@ export const MODEL_3D_STYLE_OPTIONS: {
   { value: 'space-fill', label: '空间填充模型', hint: '空间填充模型：按范德华半径铺满' },
   { value: 'stick', label: '棍状模型', hint: '棍状模型：只画化学键' },
   { value: 'wireframe', label: '线框模型', hint: '线框模型：最细的骨架线' },
+];
+
+export const VIEWER_3D_DRAG_OPTIONS: {
+  value: Viewer3DDragMode;
+  label: string;
+  hint: string;
+}[] = [
+  { value: 'rotate', label: '旋转结构', hint: '拖拽旋转结构（默认）' },
+  { value: 'pan', label: '移动摄像头', hint: '拖拽移动摄像头：平移到结构的另一侧' },
 ];
 
 export interface AppSettings {

@@ -30,7 +30,7 @@ npm run preview
 - 通过 `Kekule.IO.saveFormatData(model, 'smi')` 导出 SMILES，结果保存在 React state 中并复制到剪贴板。
 - **分子分析（RDKit）**：画布上的每个结构都会自动用 RDKit（`@rdkit/rdkit` 的 WebAssembly 构建）计算**分子式**（Hill 顺序，含隐式氢与净电荷）、相对分子质量、精确质量、重原子 / 原子总数、化学键数、环数、可旋转键、氢键供体 / 受体、TPSA 与 cLogP，并给出 RDKit 规范 SMILES（点一下即可复制）。结果显示在右侧「分子分析」面板，每个结构一张卡片，点卡片头部可折叠成只剩分子式与分子量的一行，结构多时面板内滚动。
 - **结构校验（RDKit）**：同一份分析里还会检查每个结构的价键，结果显示在面板的「结构校验」小节（整块面板可收起为窄条）。出现价键异常（例如五价碳）时，列出中文说明与 RDKit 原始报错，画布上用红圈标出问题原子，同时禁用「整理结构」与「在 3D 中查看」，结构修正后自动恢复；非价键类的提示列在「其他提示」中，不会禁用按钮。
-- **3D 视图**：顶栏「在 3D 中查看」打开模态窗口，用本地 WASM 引擎（`sci-form-wasm`）从当前画布的 SMILES 现场生成 3D 构象（固定 seed，同一结构结果一致），再用 3Dmol.js 渲染；双键 / 三键按两条 / 三条平行柱绘制，芳香环画成「实线 + 环内虚线」的大 π 键。窗口底部是一条统一工具栏，装着**模型样式切换**（球棍 / 空间填充 / 棍状 / 线框）、**重置视图**与**最大化**，默认**居中**，可在设置里改为靠左 / 靠右；最大化后按 `Esc` 先还原窗口，再按一次才关闭弹窗。显示方式也可在设置弹窗里改，两处同步。背景随主题切换（深色 `#171717` / 浅色 `#ffffff`），可拖拽旋转、滚轮缩放，角落标注「当前 3D 构象由本地算法生成，仅供参考」；关闭窗口时销毁 viewer，反复开关不会累积 canvas 或泄漏显存。存在价键错误或画布为空时不会打开。当前版本不访问 PubChem 等外部接口，全部计算在浏览器内完成。
+- **3D 视图**：顶栏「在 3D 中查看」打开模态窗口，用本地 WASM 引擎（`sci-form-wasm`）从当前画布的 SMILES 现场生成 3D 构象（固定 seed，同一结构结果一致），再用 3Dmol.js 渲染。画布上有多个结构时会**逐个生成再并排合并**到同一个模型里（标题栏显示「N 个结构 · M 个原子 · K 根键」），不会只显示其中一个；双键 / 三键按两条 / 三条平行柱绘制，芳香环画成「实线 + 环内虚线」的大 π 键。窗口底部是一条统一工具栏，装着**模型样式切换**（球棍 / 空间填充 / 棍状 / 线框）、**拖拽方式**（旋转结构 / 移动摄像头）、**重置视图**与**最大化**，默认**居中**，可在设置里改为靠左 / 靠右；最大化后按 `Esc` 先还原窗口，再按一次才关闭弹窗。显示方式也可在设置弹窗里改，两处同步。背景随主题切换（深色 `#171717` / 浅色 `#ffffff`），角落标注「当前 3D 构象由本地算法生成，仅供参考」；关闭窗口时销毁 viewer，反复开关不会累积 canvas 或泄漏显存。存在价键错误或画布为空时不会打开。当前版本不访问 PubChem 等外部接口，全部计算在浏览器内完成。
 - 支持载入 SMILES 并生成高质量 2D 坐标（只在这一步生成一次）。由于 Kekule 1.0.4 只自带 SMILES 写入器、没有读取器和坐标生成器，这里按需懒加载 OpenChemLib 作为辅助。
 - **整理视图**（顶栏魔棒图标）：把画布上零散的结构**搬动**成整齐的一行行（按原位置从上到下、从左到右，多行时均衡行宽、行内垂直居中、间距一致），再把整块缩放到约占画布 70%–80% 并居中。它只平移整块结构，**不重算任何原子坐标**，也不加载 OpenChemLib；三个结构实测约 130ms，执行期间先弹出「正在整理视图…」的进度提示。
 - **整理结构**（顶栏网格图标）：只用 OpenChemLib 重新生成每个结构的 2D 坐标（规范键长与键角，失败时退回纯 JS 布局），**不排布、不缩放**——相机保持不动，排布与视图适配留给「整理视图」。价键错误时该按钮禁用，「整理视图」仍然可用；首次调用需要下载 OpenChemLib 代码块，期间显示「正在整理结构…」。
@@ -72,7 +72,7 @@ src/lib/structureValidation.ts  分析 + 校验结果模型、价键错误归类
 src/lib/conformer3d.ts      sci-form-wasm 引擎加载、3D 构象生成与 molblock 序列化
 src/components/SettingsModal.tsx  设置弹窗（主题切换、3D 模型样式、隐藏碳/氢原子）
 src/components/Model3DSwitch.tsx  3D 模型样式选择器（图标按钮，设置弹窗用）
-src/components/Viewer3DToolbar.tsx  3D 窗口底部工具栏（模型样式 + 重置视图 + 最大化）
+src/components/Viewer3DToolbar.tsx  3D 窗口底部工具栏（模型样式 + 拖拽方式 + 重置视图 + 最大化）
 src/components/ui/IconRadioGroup.tsx  图标单选组与边框容器（两处 3D 设置共用）
 src/components/Viewer3DModal.tsx  3D 视图弹窗（3Dmol.js 球棍 / 空间填充 / 棍状 / 线框渲染）
 src/components/AnalysisPanel.tsx  右侧「分子分析」面板（可折叠卡片 + 结构校验）
@@ -124,11 +124,14 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 ## 关于 3D 视图
 
 - 3D 构象由 `sci-form-wasm` 在浏览器内计算（不访问 PubChem 等外部接口）：先 `await init()` 初始化 WASM 模块，再 `JSON.parse(embed(smiles, 42))` 拿到 `{ num_atoms, coords, elements, bonds }`。`elements` 是原子序数数组，`coords` 是扁平化的 `x,y,z` 序列，`bonds` 是 `[起, 止, "SINGLE" | "DOUBLE" | "TRIPLE" | "AROMATIC"]` 三元组。
+- `embed()` 一次只处理**一个**结构：传入 `c1ccccc1.C1CCCC1` 时只返回后者的坐标。所以多个结构会先按 `.` 拆开（`splitComponents`），逐个 `embed()` 后再合并：每个片段按包围盒沿 x 轴依次摆开（间距 4 Å、y/z 居中），最后整体居中，键的原子索引加上片段偏移，合成一个 molblock 交给 3Dmol，因此多结构画布在 3D 里能看到全部结构。
 - 结果被拼成 **V2000 molblock**（保留键级），交给 `viewer.addModel(molblock, 'sdf')`。只用 XYZ 的话格式里没有键信息，3Dmol 只能按距离猜键、并全部画成单键；molblock 带上了键级，3Dmol 就会自己把双键 / 三键画成两条 / 三条平行圆柱，芳香键则画成「实线 + 环内虚线」的大 π 键（`aromaticStyle: 'dashed'`，即默认样式）。
 - 渲染样式由 `MODEL_STYLE_SPECS` 决定，分四种：**球棍**（`stick` + `sphere: { scale: 0.3 }`，默认）、**空间填充**（仅 `sphere: { scale: 1 }`，按范德华半径铺满）、**棍状**（仅 `stick`）、**线框**（半径 0.05 的细棍）。球棍与棍状用的是半径 0.15 的细棍（3Dmol 默认 0.25），单键更轻；同时把多重键比例提高到 `doubleBondScaling: 0.55` / `tripleBondScaling: 0.45`，细棍下双键 / 三键仍清晰可辨。线框没有用 3Dmol 的 `line` 样式，是因为 WebGL 的 `lineWidth` 在主流浏览器上被限制为 1px，在暗色背景上几乎看不见。
 - 切换样式只调用 `viewer.setStyle()` 再重新适配视图，不会重建模型，所以当前旋转角度保持不变；重新适配（`zoomTo()` + 空间填充时额外拉远 25%）是为了让更大的球体仍留在画面内。样式存在 `settings.model3DStyle`（`localStorage`），设置弹窗与 3D 窗口底部工具栏共用同一份 `Model3DSwitch` 选项定义，两处改动互相同步。
-- 底部工具栏把模型样式、重置视图、最大化放在同一个药丸形容器里（`pointer-events-none` 的外层负责定位，内层恢复交互），对齐方式由 `settings.viewer3DToolbarAlign` 决定：`justify-start` / `justify-center` / `justify-end`，默认居中。提示文字因此移到画布左上角，避免与靠左的工具栏重叠。
-- 重置视图不是 3Dmol 自带的 API：它把 `setView()` 的平移归零、旋转四元数设为单位四元数（`[0,0,0,z,0,0,0,1]`），再按当前样式重新 `zoomTo()`，所以「重置」后的画面与刚打开弹窗时完全一致。
+- 底部工具栏把模型样式、拖拽方式、重置视图、最大化放在同一个药丸形容器里（`pointer-events-none` 的外层负责定位，内层恢复交互），对齐方式由 `settings.viewer3DToolbarAlign` 决定：`justify-start` / `justify-center` / `justify-end`，默认居中。提示文字因此移到画布左上角，避免与靠左的工具栏重叠。
+- **拖拽方式**是两个互斥的图标按钮：`旋转结构`（默认，直接使用 3Dmol 的拖拽旋转）与 `移动摄像头`。后者在画布上盖一层透明层接管指针事件（避免 3Dmol 同时旋转），拖动时调用 `viewer.translate(dx, -dy)` —— 它移动的是相机 `lookingAt`，结构本身不动，所以看起来是「绕着结构平移视角」。3Dmol 的 `translate` 以画布中心为原点、y 轴朝上，因此纵向要取反，拖动方向才与手势一致。
+- 滚轮缩放在两种拖拽方式下统一由容器上的原生 `wheel` 监听（捕获阶段 + `stopPropagation`，避免与 3Dmol 自带的滚轮缩放叠加）处理，并且**以鼠标位置为锚点**：先 `viewer.zoom(factor)`，再按 `-(factor-1)·指针偏移` 平移相机，使指针下的原子保持在指针下，因此缩放既能放大也能缩小，而且作用在注视的位置而不是只朝画布中心缩放。
+- 重置视图不是 3Dmol 自带的 API：它把 `setView()` 的平移归零、旋转四元数设为单位四元数（`[0,0,0,z,0,0,0,1]`），再把相机 `lookingAt` 指回原点（`setView()` 不会撤销「移动摄像头」造成的相机偏移），最后按当前样式重新 `zoomTo()`，所以「重置」后的画面与刚打开弹窗时完全一致。
 - 最大化只是切换弹窗容器尺寸（`h-full w-full max-w-none` + 外层内边距 `p-2`），canvas 由 `ResizeObserver` 触发 `viewer.resize()` 重排，模型不被重建；`Esc` 在最大化时只还原窗口，再按一次才关闭。
 - `sci-form-wasm` 的 `exports` 只暴露了 `.`、`./alpha`、`./beta`，wasm 二进制无法用子路径导入。`vite.config.ts` 里把 `sci-form-wasm/wasm` 别名到真实的 `sci_form_wasm_bg.wasm`，代码再用 `import wasmUrl from 'sci-form-wasm/wasm?url'` 取得资源地址并显式传给 `init({ module_or_path })`，开发与生产构建行为一致。
 - `embed()` 是同步 WASM 调用，会阻塞主线程；调用前先让出一帧（`requestAnimationFrame`），保证弹窗先画出「正在计算 3D 构象…」的加载态。

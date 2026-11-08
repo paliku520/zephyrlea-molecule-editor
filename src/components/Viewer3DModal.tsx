@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { AlertTriangle, Box, RotateCcw, X } from 'lucide-react';
 import type { AtomStyleSpec, GLViewer } from '3dmol';
 import { computeConformer, type Conformer3D } from '../lib/conformer3d';
-import type { Model3DStyle, ThemeMode, Viewer3DToolbarAlign } from '../lib/settings';
+import type {
+  Model3DStyle,
+  ThemeMode,
+  Viewer3DDragMode,
+  Viewer3DToolbarAlign,
+} from '../lib/settings';
 import { Viewer3DToolbar } from './Viewer3DToolbar';
 
 type ThreeDmolModule = typeof import('3dmol');
@@ -21,6 +32,9 @@ type Stage = 'loading' | 'ready' | 'error';
 
 /** Deterministic so the same structure always yields the same conformer. */
 const CONFORMER_SEED = 42;
+
+/** Zoom applied per wheel notch; the reciprocal is used for zooming out. */
+const ZOOM_STEP = 1.12;
 
 /**
  * Thin sticks keep single bonds light; the raised multi-bond scaling stops the
@@ -50,12 +64,27 @@ function fitView(viewer: GLViewer, style: Model3DStyle) {
   if (style === 'space-fill') viewer.zoom(0.75);
 }
 
-/** Back to the default orientation, pan and distance for the current style. */
+/**
+ * "Move camera" drags shift the camera instead of the model, which `setView()`
+ * cannot undo, so the camera is pointed back at the origin by hand.
+ */
+function resetCamera(viewer: GLViewer) {
+  const internal = viewer as unknown as {
+    lookingAt?: { set?: (x: number, y: number, z: number) => void };
+    camera?: { lookAt?: (target: unknown) => void };
+  };
+
+  internal.lookingAt?.set?.(0, 0, 0);
+  if (internal.lookingAt) internal.camera?.lookAt?.(internal.lookingAt);
+}
+
+/** Back to the default orientation, camera position and distance for the style. */
 function resetView(viewer: GLViewer, style: Model3DStyle) {
   const view = viewer.getView();
   // Keep only the camera distance; the pan offsets and rotation go back to zero
   // (an identity quaternion) before the view is re-fitted.
   viewer.setView([0, 0, 0, view[3] ?? 0, 0, 0, 0, 1]);
+  resetCamera(viewer);
   fitView(viewer, style);
   viewer.render();
 }
@@ -109,10 +138,90 @@ export function Viewer3DModal({
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [maximized, setMaximized] = useState(false);
+  const [dragMode, setDragMode] = useState<Viewer3DDragMode>('rotate');
+
+  /** Pointer state of the "move camera" overlay; `null` when not dragging. */
+  const panRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
-    if (open) setMaximized(false);
+    if (open) {
+      setMaximized(false);
+      setDragMode('rotate');
+    }
   }, [open]);
+
+  const handlePanStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic events have no active pointer; dragging still works without capture.
+    }
+    panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+  }, []);
+
+  const handlePanMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = panRef.current;
+    const viewer = viewerRef.current;
+    if (!drag || !viewer || drag.pointerId !== event.pointerId) return;
+
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (dx === 0 && dy === 0) return;
+
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+
+    // `translate` moves the camera laterally while the structures stay put, so
+    // this pans instead of rotating. Its y axis points up, hence the negation.
+    viewer.translate(dx, -dy);
+    viewer.render();
+  }, []);
+
+  const handlePanEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (panRef.current?.pointerId !== event.pointerId) return;
+    panRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  /**
+   * Wheel zoom in every drag mode, anchored on the pointer: the point under the
+   * cursor stays under the cursor, so zooming works in whichever direction the
+   * user is looking instead of only towards the middle of the view.
+   */
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!open || !container) return;
+
+    const onWheel = (event: WheelEvent) => {
+      const viewer = viewerRef.current;
+      if (!viewer || event.deltaY === 0) return;
+
+      // Capture phase: 3Dmol's own wheel handler would otherwise zoom as well.
+      event.preventDefault();
+      event.stopPropagation();
+
+      const factor = event.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP;
+      const rect = container.getBoundingClientRect();
+      const offsetX = event.clientX - (rect.left + rect.width / 2);
+      const offsetY = event.clientY - (rect.top + rect.height / 2);
+
+      viewer.zoom(factor);
+
+      if (offsetX !== 0 || offsetY !== 0) {
+        // Scaling by `factor` pushes a point at `offset` out to `offset * factor`;
+        // move the camera back by the difference so it stays put.
+        viewer.translate(-(factor - 1) * offsetX, (factor - 1) * offsetY);
+      }
+
+      viewer.render();
+    };
+
+    container.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    return () => container.removeEventListener('wheel', onWheel, { capture: true });
+  }, [open, stage]);
 
   useEffect(() => {
     if (!open) return;
@@ -268,6 +377,7 @@ export function Viewer3DModal({
           <div className="flex shrink-0 items-center gap-1.5">
             {conformer && (
               <span className="mr-1.5 hidden text-[11px] text-ink-faint sm:inline">
+                {conformer.fragmentCount > 1 && `${conformer.fragmentCount} 个结构 · `}
                 {conformer.atomCount} 个原子 · {conformer.bondCount} 根键
               </span>
             )}
@@ -287,9 +397,25 @@ export function Viewer3DModal({
         <div className="relative min-h-0 flex-1">
           <div
             ref={containerRef}
-            className="absolute inset-0 cursor-grab active:cursor-grabbing"
+            className={`absolute inset-0 ${
+              dragMode === 'rotate' ? 'cursor-grab active:cursor-grabbing' : ''
+            }`}
             style={{ backgroundColor: VIEWER_BACKGROUND[theme] }}
           />
+
+          {/*
+            In "move camera" mode this layer takes the pointer events, so 3Dmol
+            does not rotate the structures and the drag can pan the camera.
+          */}
+          {dragMode === 'pan' && (
+            <div
+              className="absolute inset-0 cursor-move touch-none select-none active:cursor-grabbing"
+              onPointerDown={handlePanStart}
+              onPointerMove={handlePanMove}
+              onPointerUp={handlePanEnd}
+              onPointerCancel={handlePanEnd}
+            />
+          )}
 
           {stage === 'ready' && (
             <p className="pointer-events-none absolute left-4 top-3 text-[11px] leading-relaxed text-ink-faint">
@@ -331,6 +457,8 @@ export function Viewer3DModal({
             <Viewer3DToolbar
               modelStyle={modelStyle}
               onModelStyleChange={onModelStyleChange}
+              dragMode={dragMode}
+              onDragModeChange={setDragMode}
               onResetView={handleResetView}
               maximized={maximized}
               onToggleMaximized={() => setMaximized((value) => !value)}

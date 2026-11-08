@@ -12,6 +12,8 @@ export interface Conformer3D {
   bondCount: number;
   /** Milliseconds reported by the engine. */
   elapsedMs: number;
+  /** Number of disconnected structures merged into this conformer. */
+  fragmentCount: number;
 }
 
 /** Shape of `embed()`'s JSON payload (`elements` holds atomic numbers). */
@@ -72,19 +74,110 @@ const BOND_TYPES: Record<string, number> = {
   AROMATIC: 4,
 };
 
-function buildMolBlock(result: EmbedResult, title: string): Conformer3D {
+/** Gap between two structures placed side by side, in Ångström. */
+const FRAGMENT_GAP = 4;
+
+/** One atom / bond record parsed out of `embed()`'s JSON, still fragment-local. */
+interface Fragment3D {
+  elements: string[];
+  coords: Array<[number, number, number]>;
+  /** `[from, to, molType]` with fragment-local, 0-based atom indexes. */
+  bonds: Array<[number, number, number]>;
+}
+
+function readFragment(result: EmbedResult): Fragment3D {
   const coords = result.coords ?? [];
   const elements = result.elements ?? [];
-  const count = Math.min(result.num_atoms ?? elements.length, elements.length, Math.floor(coords.length / 3));
+  const count = Math.min(
+    result.num_atoms ?? elements.length,
+    elements.length,
+    Math.floor(coords.length / 3),
+  );
 
   if (count <= 0) {
     throw new Error('本地引擎没有返回任何原子坐标。');
   }
 
-  const bonds = (result.bonds ?? []).filter(
-    ([from, to]) =>
-      from >= 0 && to >= 0 && from < count && to < count && from !== to,
-  );
+  const fragment: Fragment3D = {
+    elements: elements.slice(0, count).map((element) => resolveElement(element)),
+    coords: Array.from({ length: count }, (_, index) => [
+      coords[index * 3] ?? 0,
+      coords[index * 3 + 1] ?? 0,
+      coords[index * 3 + 2] ?? 0,
+    ]),
+    bonds: (result.bonds ?? [])
+      .filter(([from, to]) => from >= 0 && to >= 0 && from < count && to < count && from !== to)
+      .map(([from, to, order]) => [from, to, BOND_TYPES[String(order).toUpperCase()] ?? 1]),
+  };
+
+  return fragment;
+}
+
+/**
+ * Place every fragment in a row along x so disconnected structures never overlap,
+ * then centre the group on the origin. A single fragment keeps the coordinates
+ * the engine produced.
+ */
+function layoutFragments(fragments: Fragment3D[]): Fragment3D {
+  if (fragments.length <= 1) return fragments[0];
+
+  let cursorX = 0;
+
+  for (const fragment of fragments) {
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let sumY = 0;
+    let sumZ = 0;
+
+    for (const [x, y, z] of fragment.coords) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      sumY += y;
+      sumZ += z;
+    }
+
+    const centerY = sumY / fragment.coords.length;
+    const centerZ = sumZ / fragment.coords.length;
+    const shiftX = cursorX - minX;
+
+    fragment.coords = fragment.coords.map(([x, y, z]) => [
+      x + shiftX,
+      y - centerY,
+      z - centerZ,
+    ]);
+
+    cursorX += maxX - minX + FRAGMENT_GAP;
+  }
+
+  const totalWidth = cursorX - FRAGMENT_GAP;
+  const shift = -totalWidth / 2;
+  for (const fragment of fragments) {
+    fragment.coords = fragment.coords.map(([x, y, z]) => [x + shift, y, z]);
+  }
+
+  return {
+    elements: fragments.flatMap((fragment) => fragment.elements),
+    coords: fragments.flatMap((fragment) => fragment.coords),
+    bonds: fragments.flatMap((fragment, fragmentIndex) => {
+      const offset = fragments
+        .slice(0, fragmentIndex)
+        .reduce((sum, previous) => sum + previous.elements.length, 0);
+
+      return fragment.bonds.map(
+        ([from, to, type]) => [from + offset, to + offset, type] as [number, number, number],
+      );
+    }),
+  };
+}
+
+function buildMolBlock(
+  merged: Fragment3D,
+  fragmentCount: number,
+  title: string,
+  elapsedMs: number,
+): Conformer3D {
+  const count = merged.elements.length;
+  const bonds = merged.bonds;
 
   // V2000 stores both counts in three-character fields.
   if (count > 999 || bonds.length > 999) {
@@ -100,18 +193,14 @@ function buildMolBlock(result: EmbedResult, title: string): Conformer3D {
 
   const lines = [title, '  Zephyrlea  3D', '', counts];
 
-  for (let index = 0; index < count; index += 1) {
-    const offset = index * 3;
-    const x = (coords[offset] ?? 0).toFixed(4).padStart(10);
-    const y = (coords[offset + 1] ?? 0).toFixed(4).padStart(10);
-    const z = (coords[offset + 2] ?? 0).toFixed(4).padStart(10);
-    const symbol = resolveElement(elements[index]).padEnd(3);
+  merged.coords.forEach(([rawX, rawY, rawZ], index) => {
+    const x = rawX.toFixed(4).padStart(10);
+    const y = rawY.toFixed(4).padStart(10);
+    const z = rawZ.toFixed(4).padStart(10);
+    lines.push(`${x}${y}${z} ${merged.elements[index].padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
+  });
 
-    lines.push(`${x}${y}${z} ${symbol} 0  0  0  0  0  0  0  0  0  0  0  0`);
-  }
-
-  for (const [from, to, order] of bonds) {
-    const type = BOND_TYPES[order.toUpperCase()] ?? 1;
+  for (const [from, to, type] of bonds) {
     lines.push(
       `${String(from + 1).padStart(3)}${String(to + 1).padStart(3)}${String(type).padStart(3)}  0  0  0  0`,
     );
@@ -123,7 +212,8 @@ function buildMolBlock(result: EmbedResult, title: string): Conformer3D {
     molblock: `${lines.join('\n')}\n`,
     atomCount: count,
     bondCount: bonds.length,
-    elapsedMs: result.time_ms ?? 0,
+    elapsedMs,
+    fragmentCount,
   };
 }
 
@@ -133,28 +223,62 @@ function nextFrame(): Promise<void> {
   });
 }
 
-/**
- * Generates a 3D conformer with the bundled `sci-form` WASM engine. `embed()` is
- * a synchronous WASM call, so the browser is yielded first to let the caller
- * paint its loading state before the main thread blocks.
- */
-export async function computeConformer(smiles: string, seed = 42): Promise<Conformer3D> {
-  const trimmed = smiles.trim();
-  if (!trimmed) throw new Error('画布为空，没有可生成 3D 构象的结构。');
+/** `.` separates disconnected structures, so each one is embedded on its own. */
+function splitComponents(smiles: string): string[] {
+  return smiles
+    .split('.')
+    .map((component) => component.trim())
+    .filter((component) => component.length > 0);
+}
 
-  await loadConformerEngine();
-  await nextFrame();
-
-  const raw = embed(trimmed, seed);
+function embedOne(smiles: string, seed: number): EmbedResult {
+  const raw = embed(smiles, seed);
 
   let parsed: EmbedResult;
   try {
     parsed = JSON.parse(raw) as EmbedResult;
   } catch {
-    throw new Error('本地引擎返回了无法解析的结果。');
+    throw new Error(`本地引擎返回了无法解析的结果（${smiles}）。`);
   }
 
   if (parsed.error) throw new Error(parsed.error);
 
-  return buildMolBlock(parsed, `sci-form-wasm conformer (seed ${seed}) for ${trimmed}`);
+  return parsed;
+}
+
+/**
+ * Generates a 3D conformer with the bundled `sci-form` WASM engine. `embed()` is
+ * a synchronous WASM call, so the browser is yielded first to let the caller
+ * paint its loading state before the main thread blocks.
+ *
+ * `embed()` keeps only one structure when the SMILES holds several, which is why
+ * every component is embedded separately and the results are merged into a
+ * single molblock with the structures laid out side by side.
+ */
+export async function computeConformer(smiles: string, seed = 42): Promise<Conformer3D> {
+  const trimmed = smiles.trim();
+  if (!trimmed) throw new Error('画布为空，没有可生成 3D 构象的结构。');
+
+  const components = splitComponents(trimmed);
+  if (components.length === 0) throw new Error('画布为空，没有可生成 3D 构象的结构。');
+
+  await loadConformerEngine();
+  await nextFrame();
+
+  let elapsedMs = 0;
+  const fragments = components.map((component) => {
+    const parsed = embedOne(component, seed);
+    elapsedMs += parsed.time_ms ?? 0;
+    return readFragment(parsed);
+  });
+
+  const merged = layoutFragments(fragments);
+  const label = components.length > 1 ? `${components.length} structures` : trimmed;
+
+  return buildMolBlock(
+    merged,
+    fragments.length,
+    `sci-form-wasm conformer (seed ${seed}) for ${label}`,
+    elapsedMs,
+  );
 }

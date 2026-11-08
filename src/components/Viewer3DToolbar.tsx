@@ -1,11 +1,17 @@
-import { Focus, Maximize2, Minimize2 } from 'lucide-react';
-import { IconRadioGroup } from './ui/IconRadioGroup';
+import { Focus, Maximize2, Minimize2, Move, Rotate3d } from 'lucide-react';
+import { IconRadioGroup, type IconRadioOption } from './ui/IconRadioGroup';
 import { MODEL_3D_STYLE_CHOICES } from './Model3DSwitch';
-import type { Model3DStyle } from '../lib/settings';
+import {
+  VIEWER_3D_DRAG_OPTIONS,
+  type Model3DStyle,
+  type Viewer3DDragMode,
+} from '../lib/settings';
 
 interface Viewer3DToolbarProps {
   modelStyle: Model3DStyle;
   onModelStyleChange: (style: Model3DStyle) => void;
+  dragMode: Viewer3DDragMode;
+  onDragModeChange: (mode: Viewer3DDragMode) => void;
   onResetView: () => void;
   maximized: boolean;
   onToggleMaximized: () => void;
@@ -16,10 +22,26 @@ interface Viewer3DToolbarProps {
 const ACTION_BUTTON =
   'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40';
 
-/** Single docked pill: model style, divider, reset view, maximize. */
+const DRAG_ICONS: Record<Viewer3DDragMode, typeof Rotate3d> = {
+  rotate: Rotate3d,
+  pan: Move,
+};
+
+/** Rotate the structures, or move the camera past them. */
+export const VIEWER_3D_DRAG_CHOICES: IconRadioOption<Viewer3DDragMode>[] =
+  VIEWER_3D_DRAG_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.label,
+    hint: option.hint,
+    icon: DRAG_ICONS[option.value],
+  }));
+
+/** Single docked pill: model style, drag mode, divider, reset view, maximize. */
 export function Viewer3DToolbar({
   modelStyle,
   onModelStyleChange,
+  dragMode,
+  onDragModeChange,
   onResetView,
   maximized,
   onToggleMaximized,
@@ -32,6 +54,15 @@ export function Viewer3DToolbar({
         value={modelStyle}
         options={MODEL_3D_STYLE_CHOICES}
         onChange={onModelStyleChange}
+      />
+
+      <span className="mx-0.5 h-5 w-px bg-line" />
+
+      <IconRadioGroup
+        label="拖拽方式"
+        value={dragMode}
+        options={VIEWER_3D_DRAG_CHOICES}
+        onChange={onDragModeChange}
       />
 
       <span className="mx-0.5 h-5 w-px bg-line" />
