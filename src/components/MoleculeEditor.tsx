@@ -5,6 +5,7 @@ import { LeftToolRail } from './LeftToolRail';
 import { ElementStrip } from './ElementStrip';
 import { SelectionToolbar } from './SelectionToolbar';
 import { SettingsModal } from './SettingsModal';
+import { Viewer3DModal } from './Viewer3DModal';
 import { ValidationPanel, type EngineState, type ValidationState } from './ValidationPanel';
 import { ValidationOverlay, type ValidationMark } from './ValidationOverlay';
 import { waitForKekule } from '../lib/kekule';
@@ -78,6 +79,8 @@ export function MoleculeEditor() {
   const [zoom, setZoom] = useState(1);
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewer3DOpen, setViewer3DOpen] = useState(false);
+  const [viewer3DSmiles, setViewer3DSmiles] = useState('');
   const [contentRevision, setContentRevision] = useState(0);
   const [engine, setEngine] = useState<EngineState>('loading');
   const [engineError, setEngineError] = useState<string | null>(null);
@@ -420,12 +423,13 @@ export function MoleculeEditor() {
     }
 
     const smiles = bridgeRef.current?.exportSmiles() ?? '';
-    console.log('[3D preview] Not implemented yet. Current SMILES:', smiles);
-    showToast({
-      kind: 'info',
-      title: '3D 视图即将推出',
-      detail: '当前阶段仅输出 SMILES，3D 渲染逻辑留待下一步接入。',
-    });
+    if (!smiles) {
+      showToast({ kind: 'error', title: '画布为空', detail: '请先绘制结构或载入 SMILES。' });
+      return;
+    }
+
+    setViewer3DSmiles(smiles);
+    setViewer3DOpen(true);
   }, [showToast, structureBlocked]);
 
   const handleShortcuts = useCallback(() => {
@@ -596,6 +600,13 @@ export function MoleculeEditor() {
         settings={settings}
         onChange={handleSettingsChange}
         onClose={() => setSettingsOpen(false)}
+      />
+
+      <Viewer3DModal
+        open={viewer3DOpen}
+        smiles={viewer3DSmiles}
+        theme={settings.theme}
+        onClose={() => setViewer3DOpen(false)}
       />
     </div>
   );

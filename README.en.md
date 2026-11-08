@@ -2,7 +2,7 @@
 
 A dark, canvas-first molecule editor shell built with **React 19 + Tailwind CSS 4** and **Kekule.js 1.0.4**.
 
-This is the first delivery: the full editor layout, a live Kekule composer, working drawing tools, SMILES import/export and Clean Up. The 3D preview is intentionally a placeholder for the next stage.
+This is the first delivery: the full editor layout, a live Kekule composer, working drawing tools, SMILES import/export, Clean Up and a fully local 3D preview.
 
 ## Run
 
@@ -27,6 +27,7 @@ npm run preview
 - Element tools both insert and replace: after picking an element, clicking empty canvas inserts a new atom, while clicking an existing atom **replaces its element in place** (bonds and neighbours untouched, undoable).
 - SMILES export through `Kekule.IO.saveFormatData(model, 'smi')`, stored in React state and copied to the clipboard.
 - **Structure validation (RDKit)**: every edit is checked with RDKit (the `@rdkit/rdkit` WebAssembly build) and the result shows up in the new **Structure check** panel on the right (collapsible to a narrow rail). A valence problem (e.g. a five-valent carbon) lists a Chinese explanation plus RDKit's raw message, draws a red ring around the offending atom on the canvas and disables **Clean Up** and **View in 3D** until the structure is fixed; other chemistry notes are listed separately and never disable the buttons.
+- **3D view**: **View in 3D** opens a modal that builds a 3D conformer on the fly from the canvas SMILES with a local WASM engine (`sci-form-wasm`, fixed seed so a structure always yields the same conformer) and renders it as ball-and-stick with 3Dmol.js. The background follows the theme (dark `#171717` / light `#ffffff`), drag rotates and the wheel zooms, and the corner carries the note "当前 3D 构象由本地算法生成，仅供参考" (the conformer is locally generated and indicative only). Closing the dialog destroys the viewer, so reopening never stacks canvases or leaks GPU memory. It stays shut when the canvas is empty or the structure has a valence error. No PubChem or other network call is involved — the whole computation runs in the browser.
 - SMILES import with high-quality 2D coordinates, plus **Clean Up** (OpenChemLib is lazy-loaded as a helper because Kekule 1.0.4 ships a SMILES writer but no SMILES reader/layout engine).
 - Clean Up re-lays out coordinates and **moves** the scattered structures to the middle of the screen: they are packed into tidy rows (top-to-bottom, left-to-right, rows balanced and vertically centred, even spacing) around the current viewport centre. The zoom level is kept; it only shrinks when the packed block cannot fit. A single structure that is already on screen is never moved, only its bond geometry is fixed.
 - Open `.mol`, `.sdf`, `.cml`, `.rxn`, `.kcj`, `.json` and `.smi` files.
@@ -62,7 +63,9 @@ src/lib/elementColors.ts    Dark and light element palettes (shell + canvas)
 src/lib/settings.ts         Settings model, localStorage persistence, theme application
 src/lib/rdkit.ts            RDKit WASM loader, chemistry-problem detection, dev self-test
 src/lib/structureValidation.ts  Validation model, valence classification, Chinese copy
+src/lib/conformer3d.ts      sci-form-wasm loader, 3D conformer generation, XYZ serialization
 src/components/SettingsModal.tsx  Settings modal (theme switch, hide C/H atoms)
+src/components/Viewer3DModal.tsx  3D view modal (3Dmol.js ball-and-stick rendering)
 src/components/ValidationPanel.tsx  Right-hand "Structure check" panel
 src/components/ValidationOverlay.tsx  Red-ring overlay marking problem atoms
 src/lib/moleculeLayout.ts   Pure-JS fallback layout for coordinate-less structures
@@ -95,6 +98,17 @@ src/index.css               Tailwind entry + Kekule dark-shell overrides
 - Validation runs one frame after the editor's change event plus a 220 ms debounce; `editorBridge`'s `onContentChange` carries an increasing `revision`, which is what re-triggers RDKit.
 - The red rings are a `pointer-events-none` SVG layer that re-reads `editor.objCoordToScreen()` every frame, so they follow zooming, panning, Clean Up and atom dragging; the radius is derived from the neighbouring bond length.
 - In development the browser console exposes `__zephyrleaDetectChemistryProblems({ smiles, molfile })` and `__zephyrleaRunDetectionSelfTest()` (which prints the result for `C` and `C(C)(C)(C)(C)(C)`).
+
+## 3D view notes
+
+- Conformers are computed in the browser by `sci-form-wasm` with no external service: `await init()` boots the WASM module, then `JSON.parse(embed(smiles, 42))` returns `{ num_atoms, coords, elements, bonds }`, where `elements` holds atomic numbers and `coords` a flat `x,y,z` sequence.
+- The result is turned into an **XYZ** block (atom count, comment line, then one `Symbol x y z` line per atom) and handed to `viewer.addModel(xyz, 'xyz')`. XYZ is the simplest format 3Dmol reads natively, and its parser assigns bonds by distance by default, so the ball-and-stick rendering works without a hand-built MOL block.
+- Styling is `viewer.setStyle({}, { stick: {}, sphere: { scale: 0.3 } })`; the background follows the theme via `setBackgroundColor()`, and the frame is finished with `zoomTo()` + `render()`.
+- `sci-form-wasm` only exports `.`, `./alpha` and `./beta`, so its wasm binary cannot be imported through a subpath. `vite.config.ts` aliases `sci-form-wasm/wasm` to the real `sci_form_wasm_bg.wasm`, and the code reads `import wasmUrl from 'sci-form-wasm/wasm?url'` and passes it explicitly to `init({ module_or_path })`, which behaves the same in dev and in the production build.
+- `embed()` is a synchronous WASM call that blocks the main thread, so the code yields a frame (`requestAnimationFrame`) first and the modal can paint its "正在计算 3D 构象…" state.
+- 3Dmol (~570 KB) is loaded with a dynamic `import('3dmol')` so it stays out of the initial bundle; it is a webpack UMD bundle, so the import tolerates both the `default` and namespace interop shapes.
+- Closing the dialog (or changing the structure / retrying) runs `viewer.clear()`, removes the canvas and drops the viewer reference, so repeated open/close cycles never accumulate canvases or WebGL contexts.
+- `smiles` and `theme` are handled differently on purpose: a new `smiles` rebuilds the model, a theme change only calls `setBackgroundColor()`, so switching themes does not throw away the orientation the user rotated to.
 
 ## Keyboard shortcuts
 
