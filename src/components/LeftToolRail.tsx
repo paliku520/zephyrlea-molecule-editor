@@ -80,12 +80,12 @@ const TOOL_GROUPS: ToolDefinition[][] = [
 
 export function LeftToolRail({ ready, activeTool, onSelectTool }: LeftToolRailProps) {
   return (
-    <aside className="flex w-[90px] shrink-0 flex-col items-center overflow-y-auto border-r border-white/[0.08] bg-[#262626] px-2 py-4">
+    <aside className="flex w-[90px] shrink-0 flex-col items-center overflow-y-auto border-r border-line bg-panel px-2 py-4">
       <div className="flex w-full flex-col">
         {TOOL_GROUPS.map((group, groupIndex) => (
           <Fragment key={group.map((item) => item.tool).join('-')}>
             {(groupIndex === 2 || groupIndex === 7) && (
-              <div className="my-2 h-px w-full bg-white/[0.08]" />
+              <div className="my-2 h-px w-full bg-line" />
             )}
             <div
               className={`grid w-full grid-cols-2 gap-1 ${groupIndex > 0 ? 'mt-2' : ''}`}
@@ -108,7 +108,7 @@ export function LeftToolRail({ ready, activeTool, onSelectTool }: LeftToolRailPr
       </div>
 
       <div className="mt-auto w-full pt-5">
-        <div className="mb-3 h-px w-full bg-white/[0.08]" />
+        <div className="mb-3 h-px w-full bg-line" />
         <div className="flex justify-center">
           <button
             type="button"
@@ -117,10 +117,10 @@ export function LeftToolRail({ ready, activeTool, onSelectTool }: LeftToolRailPr
             title="R 基团"
             onClick={() => onSelectTool('element:R')}
             disabled={!ready}
-            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/25 disabled:pointer-events-none disabled:opacity-35 ${
+            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-35 ${
               activeTool === 'element:R'
-                ? 'bg-[#f1f1f2] text-[#151516]'
-                : 'text-accent hover:bg-white/[0.07] hover:text-accent-strong'
+                ? 'bg-pill text-pill-ink'
+                : 'text-accent hover:bg-hover hover:text-accent-strong'
             }`}
           >
             <span className="text-[15px] font-semibold tracking-tight">R</span>

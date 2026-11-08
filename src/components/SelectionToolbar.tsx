@@ -60,12 +60,12 @@ export function SelectionToolbar({ bridge, selection }: SelectionToolbarProps) {
       role="toolbar"
       aria-label="选中结构操作"
       style={{ visibility: 'hidden' }}
-      className="fixed left-0 top-0 z-40 flex items-center gap-0.5 rounded-xl border border-white/[0.12] bg-[#262628]/95 px-1.5 py-1 shadow-[0_14px_40px_rgba(0,0,0,0.6)] backdrop-blur-md"
+      className="fixed left-0 top-0 z-40 flex items-center gap-0.5 rounded-xl border border-line-strong bg-raised/95 px-1.5 py-1 shadow-[0_14px_40px_var(--shell-shadow)] backdrop-blur-md"
     >
-      <span className="max-w-[132px] truncate px-1.5 text-[11.5px] font-medium text-[#a5a5ad]">
+      <span className="max-w-[132px] truncate px-1.5 text-[11.5px] font-medium text-ink-muted">
         {label}
       </span>
-      <span className="mx-1 h-4 w-px bg-white/[0.12]" />
+      <span className="mx-1 h-4 w-px bg-line-strong" />
       <SelectionButton
         label="逆时针旋转 15°"
         disabled={!canTransform}
@@ -116,7 +116,7 @@ function SelectionButton({ label, disabled = false, onClick, children }: Selecti
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#d6d6dc] transition-colors duration-150 hover:bg-white/[0.09] hover:text-white disabled:pointer-events-none disabled:opacity-30"
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors duration-150 hover:bg-hover-strong hover:text-ink disabled:pointer-events-none disabled:opacity-30"
     >
       {children}
     </button>

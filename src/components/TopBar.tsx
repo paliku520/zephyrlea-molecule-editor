@@ -1,17 +1,5 @@
 import { useRef } from 'react';
-import {
-  Box,
-  Download,
-  FileUp,
-  Keyboard,
-  Redo2,
-  Scan,
-  Trash2,
-  Undo2,
-  Wand2,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+import { Box, Download, FileUp, Keyboard, Redo2, Scan, Settings, Trash2, Undo2, Wand2, ZoomIn, ZoomOut } from 'lucide-react';
 import { IconButton } from './ui/IconButton';
 
 interface TopBarProps {
@@ -30,6 +18,7 @@ interface TopBarProps {
   onExport: () => void;
   onView3D: () => void;
   onShortcuts: () => void;
+  onSettings: () => void;
 }
 
 export function TopBar({
@@ -48,11 +37,12 @@ export function TopBar({
   onExport,
   onView3D,
   onShortcuts,
+  onSettings,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-white/[0.08] bg-[#262626] px-3">
+    <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-line bg-panel px-3">
       <div className="flex items-center gap-0.5">
         <IconButton label="撤销 (Ctrl+Z)" onClick={onUndo} disabled={!ready}>
           <Undo2 size={17} strokeWidth={1.7} />
@@ -62,13 +52,13 @@ export function TopBar({
         </IconButton>
       </div>
 
-      <div className="mx-1.5 h-6 w-px bg-white/[0.1]" />
+      <div className="mx-1.5 h-6 w-px bg-line" />
 
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={!ready}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[#d4d4d8] transition-colors hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-40"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
       >
         <FileUp size={16} strokeWidth={1.7} />
         <span>打开</span>
@@ -100,12 +90,12 @@ export function TopBar({
           autoComplete="off"
           placeholder="粘贴 SMILES，例如 CC(=O)Oc1ccccc1C(=O)O"
           aria-label="SMILES 输入"
-          className="h-9 w-full min-w-0 max-w-[560px] rounded-md border border-white/[0.13] bg-[#171717] px-3 text-[12.5px] text-[#e8e8ea] outline-none transition-colors placeholder:text-[#707077] focus:border-accent/70 focus:ring-1 focus:ring-accent/25 disabled:opacity-50"
+          className="h-9 w-full min-w-0 max-w-[560px] rounded-md border border-line-strong bg-canvas px-3 text-[12.5px] text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent/70 focus:ring-1 focus:ring-accent/25 disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={!ready || smiles.trim().length === 0}
-          className="h-9 shrink-0 rounded-md border border-white/[0.18] bg-white/[0.06] px-3 text-[12.5px] font-medium text-[#dedee2] transition-colors hover:bg-white/[0.1] disabled:pointer-events-none disabled:opacity-40"
+          className="h-9 shrink-0 rounded-md border border-line-strong bg-hover px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:bg-hover-strong disabled:pointer-events-none disabled:opacity-40"
         >
           载入
         </button>
@@ -117,7 +107,7 @@ export function TopBar({
           onClick={onCleanUp}
           disabled={!ready}
           title="整理结构 (Clean Up)"
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[#d0d0d4] transition-colors hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-40"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
         >
           <Wand2 size={16} strokeWidth={1.7} />
           <span className="hidden xl:inline">整理</span>
@@ -152,15 +142,18 @@ export function TopBar({
           type="button"
           onClick={onView3D}
           disabled={!ready}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-[#d0d0d4] transition-colors hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-40"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
         >
           <Box size={16} strokeWidth={1.7} />
           <span className="hidden xl:inline">在 3D 中查看</span>
         </button>
 
-        <span className="mx-1 hidden h-6 w-px bg-white/[0.1] sm:block" />
+        <span className="mx-1 hidden h-6 w-px bg-line sm:block" />
 
-        <IconButton label="快捷键" onClick={onShortcuts} disabled={!ready} className="text-[#8b8b92]">
+        <IconButton label="设置" onClick={onSettings}>
+          <Settings size={17} strokeWidth={1.6} />
+        </IconButton>
+        <IconButton label="快捷键" onClick={onShortcuts} disabled={!ready} className="text-ink-muted">
           <Keyboard size={17} strokeWidth={1.6} />
         </IconButton>
       </div>

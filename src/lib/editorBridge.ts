@@ -1,6 +1,6 @@
 import type { EditorBoard } from './editorBoard';
 import { createEditorBoard } from './editorBoard';
-import { ATOMIC_NUMBER_LIMIT, DEFAULT_ELEMENT_COLOR, ELEMENT_COLORS } from './elementColors';
+import { ATOMIC_NUMBER_LIMIT, getDefaultElementColor, getElementColors } from './elementColors';
 import { installGroupNameTranslations } from './groupNames';
 import type { KekuleNamespace } from './kekule';
 import { installBondLineStyle } from './kekuleBondStyle';
@@ -8,6 +8,7 @@ import { installElectronStateLabels } from './kekuleElectronLabel';
 import { installLabelBaseline } from './kekuleLabelStyle';
 import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
+import { DEFAULT_SETTINGS, type AppSettings, type ThemeMode } from './settings';
 
 export type ToolId =
   | 'select'
@@ -69,11 +70,25 @@ export interface MoleculeEditorBridge {
   rotateSelection(angle: number): boolean;
   mirrorSelection(axis: 'horizontal' | 'vertical'): boolean;
   deleteSelection(): boolean;
+  applySettings(settings: AppSettings): void;
   destroy(): void;
 }
 
 export const ATOM_COLOR = '#e9e9eb';
 export const BOND_COLOR = '#e9e9eb';
+
+interface ThemeRenderColors {
+  atom: string;
+  bond: string;
+  glyphStroke: string;
+  glyphFill: string;
+}
+
+function getThemeRenderColors(theme: ThemeMode): ThemeRenderColors {
+  return theme === 'light'
+    ? { atom: '#1b1b1f', bond: '#1b1b1f', glyphStroke: '#5b5b63', glyphFill: '#9a9aa2' }
+    : { atom: ATOM_COLOR, bond: BOND_COLOR, glyphStroke: '#b9b9bd', glyphFill: '#8d8d92' };
+}
 
 const ELEMENT_TOOL_CONTROLLER_ID = 'RepositoryStructureFragmentIaController';
 
@@ -476,17 +491,19 @@ function getCentroid(nodes: any[]) {
 
 /**
  * Kekule ships a CPK palette meant for white paper (black carbon, navy
- * nitrogen). Replace it with the shell palette so heteroatom labels stay
- * readable on the dark canvas while carbons keep the neutral atom color.
+ * nitrogen). Replace it with the shell palette of the active theme so atom
+ * labels stay readable on either canvas.
  */
-function installAtomPalette(K: KekuleNamespace) {
+function installAtomPalette(K: KekuleNamespace, theme: ThemeMode) {
   const rendererType = K.Render.RendererType?.R2D;
   const colorSets = K.Render.atomColors;
   if (rendererType === undefined || !colorSets) return;
 
-  const palette: string[] = new Array(ATOMIC_NUMBER_LIMIT).fill(DEFAULT_ELEMENT_COLOR);
+  const elementColors = getElementColors(theme);
+  const defaultColor = getDefaultElementColor(theme);
+  const palette: string[] = new Array(ATOMIC_NUMBER_LIMIT).fill(defaultColor);
 
-  for (const [symbol, color] of Object.entries(ELEMENT_COLORS)) {
+  for (const [symbol, color] of Object.entries(elementColors)) {
     const atomicNumber = new K.Atom(null, symbol).getAtomicNumber?.();
     if (typeof atomicNumber === 'number' && atomicNumber > 0 && atomicNumber < ATOMIC_NUMBER_LIMIT) {
       palette[atomicNumber] = color;
@@ -496,21 +513,36 @@ function installAtomPalette(K: KekuleNamespace) {
   colorSets[rendererType] = palette;
 }
 
-function applyDarkRenderTheme(K: KekuleNamespace) {
-  installAtomPalette(K);
+function applyRenderTheme(K: KekuleNamespace, settings: AppSettings) {
+  installAtomPalette(K, settings.theme);
 
   const renderConfigs = K.Render.getRender2DConfigs();
   const colorConfigs = renderConfigs.getColorConfigs();
+  const colors = getThemeRenderColors(settings.theme);
   colorConfigs.setUseAtomSpecifiedColor(true);
-  colorConfigs.setAtomColor(ATOM_COLOR);
-  colorConfigs.setLabelColor(ATOM_COLOR);
-  colorConfigs.setBondColor(BOND_COLOR);
-  colorConfigs.setGlyphStrokeColor('#b9b9bd');
-  colorConfigs.setGlyphFillColor('#8d8d92');
+  colorConfigs.setAtomColor(colors.atom);
+  colorConfigs.setLabelColor(colors.atom);
+  colorConfigs.setBondColor(colors.bond);
+  colorConfigs.setGlyphStrokeColor(colors.glyphStroke);
+  colorConfigs.setGlyphFillColor(colors.glyphFill);
 
   const lengthConfigs = renderConfigs.getLengthConfigs();
   lengthConfigs.setBondLineWidth?.(1.5);
   lengthConfigs.setBoldBondLineWidthRatio?.(2);
+
+  // Skeletal keeps carbons unlabelled and hydrogens implicit; the alternative
+  // labels every atom so carbons and hydrogen counts become visible.
+  const displayConfigs = renderConfigs.getMoleculeDisplayConfigs();
+  const displayTypes = K.Render.MoleculeDisplayType;
+  const hydrogenLevels = K.Render.HydrogenDisplayLevel;
+  const hideAtoms = settings.hideCarbonHydrogenAtoms;
+
+  displayConfigs.setDefMoleculeDisplayType?.(
+    hideAtoms ? displayTypes?.SKELETAL : displayTypes?.CONDENSED,
+  );
+  displayConfigs.setDefHydrogenDisplayLevel?.(
+    hideAtoms ? hydrogenLevels?.DEFAULT : hydrogenLevels?.ALL,
+  );
 }
 
 /** Kekule marks hovered/selected objects in pure blue; follow the shell accent. */
@@ -550,11 +582,11 @@ function readThemeToken(name: string, fallback: string) {
 }
 
 function getThemeAccent() {
-  return readThemeToken('--color-accent', '#89b5fa');
+  return readThemeToken('--shell-accent', '#89b5fa');
 }
 
 function getThemeAccentStrong() {
-  return readThemeToken('--color-accent-strong', '#a8c7fc');
+  return readThemeToken('--shell-accent-strong', '#a8c7fc');
 }
 
 function activateBondTool(
@@ -986,8 +1018,9 @@ export function createEditorBridge(
   K: KekuleNamespace,
   host: HTMLElement,
   callbacks: EditorBridgeCallbacks = {},
+  settings: AppSettings = DEFAULT_SETTINGS,
 ): MoleculeEditorBridge {
-  applyDarkRenderTheme(K);
+  applyRenderTheme(K, settings);
   installBondLineStyle(K);
   installLabelBaseline(K);
   installElectronStateLabels(K);
@@ -1332,6 +1365,13 @@ export function createEditorBridge(
         console.warn('[Kekule] Composer cleanup failed', error);
       }
       host.replaceChildren();
+    },
+    applySettings(next) {
+      if (destroyed) return;
+
+      applyRenderTheme(K, next);
+      applyUiMarkerTheme(composer);
+      repaint();
     },
   };
 

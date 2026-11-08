@@ -1,11 +1,34 @@
 @import "tailwindcss";
 
-/* Theme accent: one place to change the shell's highlight color. */
-@theme {
-  --color-accent: #89b5fa;
-  --color-accent-strong: #a8c7fc;
-  --color-accent-deep: #6d9cef;
-  --color-accent-ink: #0f172a;
+/* ---------------------------------------------------------------------------
+   Theme tokens
+   The shell ships two themes. Everything below (including the Kekule popups
+   that live outside the React tree) resolves through these variables, so
+   switching `data-theme` on <html> repaints the whole UI. `@theme inline` makes
+   the generated utilities emit `var(--shell-*)` directly.
+   --------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-accent: var(--shell-accent);
+  --color-accent-strong: var(--shell-accent-strong);
+  --color-accent-deep: var(--shell-accent-deep);
+  --color-accent-ink: var(--shell-accent-ink);
+
+  --color-canvas: var(--shell-canvas);
+  --color-panel: var(--shell-panel);
+  --color-raised: var(--shell-raised);
+  --color-popover: var(--shell-popover);
+  --color-ink: var(--shell-ink);
+  --color-ink-soft: var(--shell-ink-soft);
+  --color-ink-muted: var(--shell-ink-muted);
+  --color-ink-faint: var(--shell-ink-faint);
+  --color-pill: var(--shell-pill);
+  --color-pill-ink: var(--shell-pill-ink);
+  --color-hover: var(--shell-hover);
+  --color-hover-strong: var(--shell-hover-strong);
+  --color-line: var(--shell-line);
+  --color-line-strong: var(--shell-line-strong);
+  --color-danger: var(--shell-danger);
 }
 
 :root {
@@ -13,6 +36,62 @@
   font-family: "Inter", "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+
+  --shell-accent: #89b5fa;
+  --shell-accent-strong: #a8c7fc;
+  --shell-accent-deep: #6d9cef;
+  --shell-accent-ink: #0f172a;
+
+  --shell-canvas: #171717;
+  --shell-panel: #262626;
+  --shell-raised: #2a2a2c;
+  --shell-popover: #2e2e30;
+  --shell-ink: #e7e7e9;
+  --shell-ink-soft: #d0d0d4;
+  --shell-ink-muted: #9a9aa2;
+  --shell-ink-faint: #707077;
+  --shell-pill: #f1f1f2;
+  --shell-pill-ink: #151516;
+  --shell-hover: rgba(255, 255, 255, 0.06);
+  --shell-hover-strong: rgba(255, 255, 255, 0.11);
+  --shell-line: rgba(255, 255, 255, 0.08);
+  --shell-line-strong: rgba(255, 255, 255, 0.14);
+  --shell-dot: rgba(255, 255, 255, 0.14);
+  --shell-danger: #f07171;
+  --shell-shadow: rgba(0, 0, 0, 0.55);
+  --shell-scrim: rgba(8, 8, 10, 0.55);
+  --shell-scrollbar-thumb: rgba(255, 255, 255, 0.22);
+  --shell-glyph-filter: invert(1) brightness(1.5);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --shell-accent: #4a80e0;
+  --shell-accent-strong: #5f92ee;
+  --shell-accent-deep: #3a6fcd;
+  --shell-accent-ink: #ffffff;
+
+  --shell-canvas: #f4f4f5;
+  --shell-panel: #ffffff;
+  --shell-raised: #ffffff;
+  --shell-popover: #ffffff;
+  --shell-ink: #1b1b1f;
+  --shell-ink-soft: #3f3f46;
+  --shell-ink-muted: #6b6b75;
+  --shell-ink-faint: #91919b;
+  --shell-pill: #1c1c1f;
+  --shell-pill-ink: #ffffff;
+  --shell-hover: rgba(17, 24, 39, 0.05);
+  --shell-hover-strong: rgba(17, 24, 39, 0.09);
+  --shell-line: rgba(17, 24, 39, 0.1);
+  --shell-line-strong: rgba(17, 24, 39, 0.16);
+  --shell-dot: rgba(17, 24, 39, 0.16);
+  --shell-danger: #c62f2f;
+  --shell-shadow: rgba(15, 23, 42, 0.18);
+  --shell-scrim: rgba(15, 23, 42, 0.28);
+  --shell-scrollbar-thumb: rgba(17, 24, 39, 0.22);
+  --shell-glyph-filter: none;
 }
 
 html,
@@ -24,7 +103,8 @@ body,
 body {
   margin: 0;
   overflow: hidden;
-  background-color: #171717;
+  background-color: var(--shell-canvas);
+  color: var(--shell-ink);
 }
 
 button,
@@ -33,14 +113,14 @@ input {
 }
 
 .dot-grid {
-  background-color: #171717;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+  background-color: var(--shell-canvas);
+  background-image: radial-gradient(circle, var(--shell-dot) 1px, transparent 1px);
   background-size: 22px 22px;
   background-position: 0 0;
 }
 
 /* ---------------------------------------------------------------------------
-   Kekule.js dark-shell integration
+   Kekule.js shell integration
    Kekule renders a full editor widget with its own chrome. The React shell owns
    every control, so we hide the native regions and let the editor fill the host.
    --------------------------------------------------------------------------- */
@@ -115,7 +195,7 @@ input {
    Kekule atom / group picker
    Double-clicking an atom opens Kekule's StructureNodeSetter plus a
    StructureNodeSelectPanel. Both live in the body-level .K-Top-Layer, i.e.
-   outside .kekule-host, so they need their own dark styling.
+   outside .kekule-host, so they need their own styling for both themes.
    --------------------------------------------------------------------------- */
 
 .K-Top-Layer .K-Chem-StructureNodeSetter,
@@ -124,22 +204,22 @@ input {
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Normal-Background,
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page,
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page-Container {
-  background-color: #232326 !important;
+  background-color: var(--shell-popover) !important;
   background-image: none !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  color: #e8e8ea !important;
+  border-color: var(--shell-line) !important;
+  color: var(--shell-ink) !important;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSetter {
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border: 1px solid var(--shell-line-strong) !important;
   border-radius: 8px !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+  box-shadow: 0 12px 32px var(--shell-shadow) !important;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel {
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid var(--shell-line) !important;
   border-radius: 10px !important;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55) !important;
+  box-shadow: 0 18px 48px var(--shell-shadow) !important;
 }
 
 /* Tabs: 原子 / 基团 */
@@ -147,37 +227,37 @@ input {
   background-color: transparent !important;
   border: 0 !important;
   border-bottom: 2px solid transparent !important;
-  color: #9a9aa2 !important;
+  color: var(--shell-ink-muted) !important;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabButtonGroup .K-Button.K-State-Active {
-  background-color: rgba(137, 181, 250, 0.14) !important;
-  border-bottom-color: var(--color-accent) !important;
-  color: #f4f4f7 !important;
+  background-color: color-mix(in srgb, var(--shell-accent) 14%, transparent) !important;
+  border-bottom-color: var(--shell-accent) !important;
+  color: var(--shell-ink) !important;
 }
 
 /* Element and group stamps */
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Chem-StructureNodeSelectPanel-SetButton {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background-color: var(--shell-hover) !important;
+  border: 1px solid var(--shell-line) !important;
   border-radius: 6px !important;
-  color: #e8e8ea !important;
+  color: var(--shell-ink) !important;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Chem-StructureNodeSelectPanel-SetButton:hover {
-  background-color: rgba(137, 181, 250, 0.18) !important;
-  border-color: rgba(137, 181, 250, 0.45) !important;
-  color: #ffffff !important;
+  background-color: color-mix(in srgb, var(--shell-accent) 18%, transparent) !important;
+  border-color: color-mix(in srgb, var(--shell-accent) 45%, transparent) !important;
+  color: var(--shell-ink) !important;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-Section + .K-Section {
-  border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border-top: 1px solid var(--shell-line) !important;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page-Container,
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel .K-TabView-Page {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-color: var(--shell-scrollbar-thumb) transparent;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel ::-webkit-scrollbar {
@@ -186,7 +266,7 @@ input {
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSelectPanel ::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: var(--shell-scrollbar-thumb);
   border-radius: 999px;
 }
 
@@ -198,31 +278,31 @@ input {
 .K-Top-Layer .K-Chem-StructureNodeSetter .K-TextBox,
 .K-Top-Layer .K-Chem-StructureNodeSetter input {
   background-color: transparent !important;
-  color: #e8e8ea !important;
-  caret-color: var(--color-accent);
+  color: var(--shell-ink) !important;
+  caret-color: var(--shell-accent);
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSetter input::selection {
-  background-color: rgba(137, 181, 250, 0.35);
-  color: #ffffff;
+  background-color: color-mix(in srgb, var(--shell-accent) 35%, transparent);
+  color: var(--shell-ink);
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget {
-  background-color: rgba(255, 255, 255, 0.07) !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background-color: var(--shell-hover) !important;
+  border-left: 1px solid var(--shell-line-strong) !important;
   border-radius: 0 7px 7px 0 !important;
-  color: #e8e8ea !important;
+  color: var(--shell-ink) !important;
   opacity: 1 !important;
   width: 26px !important;
 }
 
 .K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget:hover,
 .K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget.K-State-Active {
-  background-color: rgba(137, 181, 250, 0.24) !important;
+  background-color: color-mix(in srgb, var(--shell-accent) 24%, transparent) !important;
 }
 
-/* The dropdown arrow ships as a dark PNG glyph, invisible on a dark box. */
+/* The dropdown arrow ships as a dark PNG glyph; invert it on the dark theme. */
 .K-Top-Layer .K-Chem-StructureNodeSetter .K-ComboTextBox-Assoc-Widget .K-Assoc-Glyph-Content {
-  filter: invert(1) brightness(1.5);
+  filter: var(--shell-glyph-filter);
   transform: scale(1.35);
 }

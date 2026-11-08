@@ -34,6 +34,7 @@ npm run preview
 - 撤销 / 重做、缩放、重置缩放、清空画布，以及键盘快捷键。
 - 近乎无限的画布：绘制面远大于视口，靠近边界时自动把结构整体挪回中央，可以一直向任意方向平移，且结构始终留在画布内。
 - 主题色统一由 `src/index.css` 里的 `--color-accent`（`#89B5FA`）控制，用于导出按钮、输入框聚焦环、提示图标与 R 基团按钮。
+- 顶栏「设置」按钮打开设置弹窗（模态窗口）：可切换**深色 / 浅色**主题，以及**是否隐藏碳/氢原子**。主题同时作用于整个界面、Kekule 画布的原子/键配色与双击弹出的选择面板；隐藏碳/氢原子开启时按骨架式绘制（碳不标注、氢仅在需要时显示），关闭后显示全部碳原子与氢的数量。设置保存在 `localStorage`，刷新后保持。
 - Kekule 暗色渲染主题（原子与化学键为浅色），并通过抗锯齿与 2 倍超采样让线条更平滑。
 - 双击原子弹出的「原子 / 基团」选择面板与标签输入框也重绘为暗色（标签页、元素按钮、下拉箭头、滚动条）；「基团」页的预置取代基补上了中文名（`Me 甲基`、`Ph 苯基`、`OTs 对甲苯磺酰氧基`……，悬停提示为中文），选中后会把基团**展开成真实结构**（而不是只显示 `Ph`、`NO2` 之类的缩写），可以继续双击其中的原子继续替换；双击时不会再顺带选中原子，浮动操作栏不会挡住弹窗。
 - 双击唤起该面板只在**选择 / 套索**工具下生效；使用加电荷、元素、化学键、橡皮擦等工具时，快速连续点击同一个原子只会重复该操作（例如连点两下得到 `2+`），不会弹出替换面板。
@@ -56,6 +57,9 @@ src/lib/editorBoard.ts      绘制面尺寸、无限平移（内容重定位）�
 src/lib/kekuleSpace.ts      Kekule 化学空间查询工具（分子、包围盒、滚动容器、坐标比例）
 src/lib/kekuleBondStyle.ts  化学键线宽 / 双键间距 / 环内双键朝向的渲染补丁
 src/lib/kekuleElectronLabel.ts  把电荷 / 自由基并入原子标签的渲染补丁（离子显示）
+src/lib/elementColors.ts    深色 / 浅色两套元素配色（界面与画布共用）
+src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
+src/components/SettingsModal.tsx  设置弹窗（主题切换、隐藏碳/氢原子）
 src/lib/moleculeLayout.ts   无坐标结构的纯 JS 兜底布局算法
 src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 ```
@@ -65,6 +69,8 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - Kekule 使用官方 npm `dist` 包（`kekule.min.js` 1.0.4）的本地副本加载，而非实时 CDN，因此编辑器可离线使用，且版本固定。
 - Kekule 1.0.4 的编辑器默认通过 **Canvas2D** 渲染桥绘制（也可使用 Raphael/SVG，但那不是编辑器的默认路径）。为了线条平滑，这里开启了渲染器的 `antialias` 与 2 倍 `overSamplingRatio`，并将 `bondLineWidth` 设为 1.5。
 - 原生 Kekule 界面通过两层方式移除：清空 Composer 的工具按钮数组，并用 CSS 隐藏顶部/左侧/底部区域与高级面板。
+- 两套主题由 `<html data-theme="dark|light">` 驱动一套 `--shell-*` CSS 变量，`src/index.css` 用 `@theme inline` 把它们映射成 Tailwind 颜色（`bg-panel`、`text-ink`、`border-line`…），因此切换主题不需要改任何组件代码。`index.html` 在首屏渲染前读取 `localStorage` 设置，避免闪白。
+- 主题切换时 `editorBridge.applySettings()` 会重写 Kekule 的渲染配置（原子/键/字形颜色、元素调色板、选中标记色）并重绘；碳/氢的显示则由 `defMoleculeDisplayType`（`SKELETAL` / `CONDENSED`）与 `defHydrogenDisplayLevel`（`DEFAULT` / `ALL`）控制。
 - Kekule 的 `BaseEditorIaController` 会在任何工具下响应双击、弹出内联的原子/标签编辑器。这里覆写该方法，只在 `SelectIaController`（选择 / 套索）下放行，其它工具的双击保留给工具本身（例如连点加电荷）。
 - Kekule 自带的 CPK 调色板是为白底设计的（碳为纯黑、氮为深蓝），这里替换成暗色专用调色板（见 `src/lib/elementColors.ts`）。另外 Kekule 以整行行高居中原子标签，大写字母会因此偏上、与化学键端点错开，所以把文本绘制位置下移 0.15em（`src/lib/kekuleLabelStyle.ts`）。
 - Kekule 会把形式电荷/自由基画成独立的 `ChemMarker` 对象、停在原子四周「最空」的方向，同时让未标注的碳不显示元素符号——于是阳离子只剩下一个悬空的「+」。`src/lib/kekuleElectronLabel.ts` 关闭这种自动生成的标记，把电荷/自由基并入原子标签作为上标（氢写在电荷之前，显示 `CH₃⁺` 而不是 `C⁺H₃`），对带电原子强制绘制并水平排布标签，并屏蔽已经由标签表达的标记，避免重复绘制。

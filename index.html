@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#151516" />
     <title>Zephyrlea · Molecule Editor</title>
+    <script>
+      // Apply the stored theme before first paint so the shell never flashes.
+      try {
+        var stored = JSON.parse(localStorage.getItem('zephyrlea.settings') || '{}');
+        var theme = stored && stored.theme === 'light' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      } catch (error) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
     <link rel="stylesheet" href="/vendor/kekule/kekule.css" />
     <!-- Kekule.js 1.0.4 (MIT), vendored from the official npm dist bundle. -->
     <script src="/vendor/kekule/kekule.min.js"></script>

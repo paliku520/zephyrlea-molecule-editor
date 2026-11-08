@@ -4,6 +4,7 @@ import { TopBar } from './TopBar';
 import { LeftToolRail } from './LeftToolRail';
 import { ElementStrip } from './ElementStrip';
 import { SelectionToolbar } from './SelectionToolbar';
+import { SettingsModal } from './SettingsModal';
 import { waitForKekule } from '../lib/kekule';
 import {
   createEditorBridge,
@@ -11,6 +12,7 @@ import {
   type SelectionSnapshot,
   type ToolId,
 } from '../lib/editorBridge';
+import { applyThemeToDocument, loadSettings, saveSettings, type AppSettings } from '../lib/settings';
 
 interface ToastState {
   kind: 'success' | 'error' | 'info';
@@ -24,10 +26,10 @@ function ToastIcon({ kind }: { kind: ToastState['kind'] }) {
   }
 
   if (kind === 'error') {
-    return <AlertTriangle size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-[#f07171]" />;
+    return <AlertTriangle size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-danger" />;
   }
 
-  return <Info size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-[#9ca3af]" />;
+  return <Info size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-ink-muted" />;
 }
 
 export function MoleculeEditor() {
@@ -43,6 +45,11 @@ export function MoleculeEditor() {
   const [hasContent, setHasContent] = useState(false);
   const [selection, setSelection] = useState<SelectionSnapshot | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   const showToast = useCallback((next: ToastState | null, duration = 5200) => {
     if (toastTimerRef.current !== null) {
@@ -81,10 +88,15 @@ export function MoleculeEditor() {
         const K = await waitForKekule();
         if (cancelled || !hostRef.current) return;
 
-        bridge = createEditorBridge(K, hostRef.current, {
-          onContentChange: (nextHasContent) => setHasContent(nextHasContent),
-          onSelectionChange: setSelection,
-        });
+        bridge = createEditorBridge(
+          K,
+          hostRef.current,
+          {
+            onContentChange: (nextHasContent) => setHasContent(nextHasContent),
+            onSelectionChange: setSelection,
+          },
+          settingsRef.current,
+        );
 
         bridgeRef.current = bridge;
         bridge.setTool('single');
@@ -131,6 +143,12 @@ export function MoleculeEditor() {
       observer.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    applyThemeToDocument(settings.theme);
+    saveSettings(settings);
+    bridgeRef.current?.applySettings(settings);
+  }, [settings]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -275,8 +293,12 @@ export function MoleculeEditor() {
     });
   }, [showToast]);
 
+  const handleSettingsChange = useCallback((next: AppSettings) => {
+    setSettings(next);
+  }, []);
+
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#171717] text-[#e7e7e9] antialiased">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-canvas text-ink antialiased">
       <TopBar
         ready={ready}
         smiles={smilesInput}
@@ -293,6 +315,7 @@ export function MoleculeEditor() {
         onExport={handleExport}
         onView3D={handleView3D}
         onShortcuts={handleShortcuts}
+        onSettings={() => setSettingsOpen(true)}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -301,6 +324,7 @@ export function MoleculeEditor() {
         <div className="flex min-w-0 flex-1 flex-col">
           <ElementStrip
             ready={ready}
+            theme={settings.theme}
             activeTool={activeTool}
             onSelectElement={handleSelectElement}
           />
@@ -312,23 +336,23 @@ export function MoleculeEditor() {
 
             {!ready && !initError && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex items-center gap-3 text-[13px] text-[#8f8f96]">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/15 border-t-white/60" />
+                <div className="flex items-center gap-3 text-[13px] text-ink-muted">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-ink/60" />
                   正在加载 Kekule.js…
                 </div>
               </div>
             )}
 
             {initError && (
-              <div className="absolute inset-0 flex items-center justify-center bg-[#171717]">
-                <div className="max-w-md rounded-xl border border-white/[0.1] bg-[#262626] p-6 text-center shadow-2xl">
-                  <AlertTriangle size={22} className="mx-auto text-[#f07171]" />
-                  <p className="mt-3 text-sm font-medium text-white">Kekule.js 初始化失败</p>
-                  <p className="mt-2 break-words text-xs leading-relaxed text-[#98989f]">{initError}</p>
+              <div className="absolute inset-0 flex items-center justify-center bg-canvas">
+                <div className="max-w-md rounded-xl border border-line bg-panel p-6 text-center shadow-2xl">
+                  <AlertTriangle size={22} className="mx-auto text-danger" />
+                  <p className="mt-3 text-sm font-medium text-ink">Kekule.js 初始化失败</p>
+                  <p className="mt-2 break-words text-xs leading-relaxed text-ink-muted">{initError}</p>
                   <button
                     type="button"
                     onClick={() => setInitAttempt((attempt) => attempt + 1)}
-                    className="mt-4 rounded-md border border-white/[0.14] bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/[0.1]"
+                    className="mt-4 rounded-md border border-line-strong bg-hover px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-hover-strong"
                   >
                     重试
                   </button>
@@ -338,7 +362,7 @@ export function MoleculeEditor() {
 
             {ready && !hasContent && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex items-center gap-2 text-[13px] font-normal text-[#7b8794]">
+                <div className="flex items-center gap-2 text-[13px] font-normal text-ink-muted">
                   <Search size={15} strokeWidth={1.7} />
                   点击开始绘制，粘贴 SMILES，或打开文件
                 </div>
@@ -350,12 +374,12 @@ export function MoleculeEditor() {
 
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-7 z-[100] flex justify-center px-4">
-          <div className="pointer-events-auto flex max-w-[640px] items-start gap-3 rounded-xl border border-white/[0.11] bg-[#2a2a2c]/95 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-md">
+          <div className="pointer-events-auto flex max-w-[640px] items-start gap-3 rounded-xl border border-line-strong bg-raised/95 px-4 py-3 shadow-[0_20px_60px_var(--shell-shadow)] backdrop-blur-md">
             <ToastIcon kind={toast.kind} />
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-medium leading-5 text-[#f1f1f3]">{toast.title}</p>
+              <p className="text-[13px] font-medium leading-5 text-ink">{toast.title}</p>
               {toast.detail && (
-                <p className="mt-1 break-all font-mono text-[11.5px] leading-relaxed text-[#a2a2a9]">
+                <p className="mt-1 break-all font-mono text-[11.5px] leading-relaxed text-ink-muted">
                   {toast.detail}
                 </p>
               )}
@@ -364,13 +388,20 @@ export function MoleculeEditor() {
               type="button"
               onClick={() => showToast(null)}
               aria-label="关闭提示"
-              className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#8c8c93] transition-colors hover:bg-white/[0.08] hover:text-white"
+              className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-hover-strong hover:text-ink"
             >
               <X size={14} strokeWidth={2} />
             </button>
           </div>
         </div>
       )}
+
+      <SettingsModal
+        open={settingsOpen}
+        settings={settings}
+        onChange={handleSettingsChange}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

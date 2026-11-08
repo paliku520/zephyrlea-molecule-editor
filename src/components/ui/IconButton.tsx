@@ -23,10 +23,10 @@ export function IconButton({
       aria-label={label}
       aria-pressed={active || undefined}
       title={label}
-      className={`inline-flex ${dimension} shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-white/25 disabled:pointer-events-none disabled:opacity-35 ${
+      className={`inline-flex ${dimension} shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-35 ${
         active
-          ? 'bg-[#f1f1f2] text-[#151516] shadow-[0_1px_0_rgba(255,255,255,0.25)]'
-          : 'text-[#e0e0e4] hover:bg-white/[0.07] hover:text-white'
+          ? 'bg-pill text-pill-ink shadow-[0_1px_0_var(--shell-line)]'
+          : 'text-ink-soft hover:bg-hover hover:text-ink'
       } ${className}`}
       {...props}
     >

@@ -1,26 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { ToolId } from '../lib/editorBridge';
-import { DEFAULT_ELEMENT_COLOR, ELEMENT_COLORS } from '../lib/elementColors';
+import { getDefaultElementColor, getElementColors } from '../lib/elementColors';
+import type { ThemeMode } from '../lib/settings';
 
 interface ElementStripProps {
   ready: boolean;
+  theme: ThemeMode;
   activeTool: ToolId | null;
   onSelectElement: (symbol: string) => void;
 }
 
-const PRIMARY_ELEMENTS = [
-  'C',
-  'H',
-  'N',
-  'O',
-  'S',
-  'P',
-  'F',
-  'Cl',
-  'Br',
-  'I',
-].map((symbol) => ({ symbol, color: ELEMENT_COLORS[symbol] ?? DEFAULT_ELEMENT_COLOR }));
+const PRIMARY_ELEMENT_SYMBOLS = ['C', 'H', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I'];
 
 const MORE_ELEMENTS = [
   'B',
@@ -50,9 +41,16 @@ const MORE_ELEMENTS = [
   'Te',
 ];
 
-export function ElementStrip({ ready, activeTool, onSelectElement }: ElementStripProps) {
+export function ElementStrip({ ready, theme, activeTool, onSelectElement }: ElementStripProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreWrapperRef = useRef<HTMLDivElement>(null);
+
+  const elementColors = getElementColors(theme);
+  const defaultColor = getDefaultElementColor(theme);
+  const primaryElements = PRIMARY_ELEMENT_SYMBOLS.map((symbol) => ({
+    symbol,
+    color: elementColors[symbol] ?? defaultColor,
+  }));
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -68,8 +66,8 @@ export function ElementStrip({ ready, activeTool, onSelectElement }: ElementStri
   }, [moreOpen]);
 
   return (
-    <div className="relative z-20 flex h-[52px] shrink-0 items-center gap-1 border-b border-white/[0.08] bg-[#262626] px-6">
-      {PRIMARY_ELEMENTS.map(({ symbol, color }) => {
+    <div className="relative z-20 flex h-[52px] shrink-0 items-center gap-1 border-b border-line bg-panel px-6">
+      {primaryElements.map(({ symbol, color }) => {
         const isActive = activeTool === `element:${symbol}`;
 
         return (
@@ -79,8 +77,8 @@ export function ElementStrip({ ready, activeTool, onSelectElement }: ElementStri
             disabled={!ready}
             onClick={() => onSelectElement(symbol)}
             title={`插入 ${symbol} 原子`}
-            className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-[13px] font-semibold tracking-tight transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/25 disabled:pointer-events-none disabled:opacity-40 ${
-              isActive ? 'bg-white/[0.11] ring-1 ring-white/[0.16]' : 'hover:bg-white/[0.06]'
+            className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-[13px] font-semibold tracking-tight transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-40 ${
+              isActive ? 'bg-hover-strong ring-1 ring-line-strong' : 'hover:bg-hover'
             }`}
             style={{ color }}
           >
@@ -89,7 +87,7 @@ export function ElementStrip({ ready, activeTool, onSelectElement }: ElementStri
         );
       })}
 
-      <div className="mx-2 h-5 w-px bg-white/[0.09]" />
+      <div className="mx-2 h-5 w-px bg-line" />
 
       <div ref={moreWrapperRef} className="relative">
         <button
@@ -97,14 +95,14 @@ export function ElementStrip({ ready, activeTool, onSelectElement }: ElementStri
           disabled={!ready}
           onClick={() => setMoreOpen((open) => !open)}
           aria-expanded={moreOpen}
-          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/[0.14] px-3 text-[12px] font-medium text-[#c8c8cd] transition-colors hover:bg-white/[0.06] hover:text-white disabled:pointer-events-none disabled:opacity-40"
+          className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line-strong px-3 text-[12px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
         >
           其他
           <ChevronDown size={12} strokeWidth={2} className={moreOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
         </button>
 
         {moreOpen && (
-          <div className="absolute left-0 top-[calc(100%+8px)] z-50 w-[276px] rounded-lg border border-white/[0.12] bg-[#2e2e30] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.55)]">
+          <div className="absolute left-0 top-[calc(100%+8px)] z-50 w-[276px] rounded-lg border border-line-strong bg-popover p-2 shadow-[0_18px_50px_var(--shell-shadow)]">
             <div className="grid grid-cols-5 gap-1">
               {MORE_ELEMENTS.map((symbol) => {
                 const isActive = activeTool === `element:${symbol}`;
@@ -117,8 +115,8 @@ export function ElementStrip({ ready, activeTool, onSelectElement }: ElementStri
                       onSelectElement(symbol);
                       setMoreOpen(false);
                     }}
-                    className={`h-8 rounded-md text-[12.5px] font-semibold text-[#d7d7dc] transition-colors ${
-                      isActive ? 'bg-white/[0.11] text-white' : 'hover:bg-white/[0.07] hover:text-white'
+                    className={`h-8 rounded-md text-[12.5px] font-semibold text-ink-soft transition-colors ${
+                      isActive ? 'bg-hover-strong text-ink' : 'hover:bg-hover hover:text-ink'
                     }`}
                   >
                     {symbol}
