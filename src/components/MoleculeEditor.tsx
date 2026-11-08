@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Info, LoaderCircle, Search, X } from 'lucide-react';
+import { AppHeader } from './AppHeader';
+import { AboutModal } from './AboutModal';
 import { TopBar } from './TopBar';
 import { LeftToolRail } from './LeftToolRail';
 import { ElementStrip } from './ElementStrip';
 import { SelectionToolbar } from './SelectionToolbar';
 import { SettingsModal } from './SettingsModal';
+import { PeriodicTableModal } from './PeriodicTableModal';
 import { Viewer3DModal } from './Viewer3DModal';
 import { AnalysisPanel, type EngineState, type ValidationState } from './AnalysisPanel';
 import { ValidationOverlay, type ValidationMark } from './ValidationOverlay';
@@ -97,6 +100,7 @@ export function MoleculeEditor() {
   const [zoom, setZoom] = useState(1);
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [viewer3DOpen, setViewer3DOpen] = useState(false);
   const [viewer3DSmiles, setViewer3DSmiles] = useState('');
   const [contentRevision, setContentRevision] = useState(0);
@@ -109,6 +113,11 @@ export function MoleculeEditor() {
   const [validationMarks, setValidationMarks] = useState<ValidationMark[]>([]);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [busyTask, setBusyTask] = useState<'cleanUp' | 'relayout' | null>(null);
+  /** Open periodic table request: `apply` writes the element back where it came from. */
+  const [elementPick, setElementPick] = useState<{
+    apply: (symbol: string) => void;
+    current: string | null;
+  } | null>(null);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -161,6 +170,10 @@ export function MoleculeEditor() {
             },
             onSelectionChange: setSelection,
             onZoomChange: setZoom,
+            onRequestElementPick: (apply, currentSymbol) => {
+              setElementPick({ apply, current: currentSymbol });
+              return true;
+            },
           },
           settingsRef.current,
         );
@@ -512,6 +525,12 @@ export function MoleculeEditor() {
       theme={settings.theme}
       activeTool={activeTool}
       onSelectElement={handleSelectElement}
+      onOpenPeriodicTable={() =>
+        setElementPick({
+          apply: (symbol) => handleSelectElement(symbol),
+          current: activeTool?.startsWith('element:') ? activeTool.slice('element:'.length) : null,
+        })
+      }
       placement={placement}
     />
   );
@@ -548,6 +567,8 @@ export function MoleculeEditor() {
         busyTask ? 'cursor-progress' : ''
       }`}
     >
+      <AppHeader onOpenAbout={() => setAboutOpen(true)} />
+
       {!bottomDocked && renderTopBar('top')}
 
       <div className={bottomDocked ? 'flex min-h-0 flex-1 flex-col' : 'flex min-h-0 flex-1'}>
@@ -667,11 +688,25 @@ export function MoleculeEditor() {
         </div>
       )}
 
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+
       <SettingsModal
         open={settingsOpen}
         settings={settings}
         onChange={handleSettingsChange}
         onClose={() => setSettingsOpen(false)}
+      />
+
+      <PeriodicTableModal
+        open={elementPick !== null}
+        theme={settings.theme}
+        selectedSymbol={elementPick?.current ?? null}
+        onPick={(symbol) => {
+          const request = elementPick;
+          setElementPick(null);
+          request?.apply(symbol);
+        }}
+        onClose={() => setElementPick(null)}
       />
 
       <Viewer3DModal

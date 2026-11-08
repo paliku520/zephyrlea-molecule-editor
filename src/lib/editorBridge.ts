@@ -9,7 +9,7 @@ import type { KekuleNamespace } from './kekule';
 import { installBondLineStyle } from './kekuleBondStyle';
 import { installElectronStateLabels } from './kekuleElectronLabel';
 import { installLabelBaseline } from './kekuleLabelStyle';
-import { installAtomOnlyNodePicker, installNodeSetter } from './kekuleNodeSetter';
+import { installAtomOnlyNodePicker, installNodeSetter, installPeriodicTablePicker } from './kekuleNodeSetter';
 import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
 import { DEFAULT_SETTINGS, type AppSettings, type ThemeMode } from './settings';
@@ -43,6 +43,14 @@ export interface EditorBridgeCallbacks {
   onContentChange?: (hasContent: boolean, revision: number) => void;
   onSelectionChange?: (selection: SelectionSnapshot | null) => void;
   onZoomChange?: (zoom: number) => void;
+  /**
+   * Show the app's periodic table for the atom label box. `apply` writes the
+   * chosen element back into the editor; return false to keep Kekule's dialog.
+   */
+  onRequestElementPick?: (
+    apply: (symbol: string) => void,
+    currentSymbol: string | null,
+  ) => boolean;
 }
 
 /** Circle drawn around an atom by the validation overlay (viewport pixels). */
@@ -1093,6 +1101,10 @@ export function createEditorBridge(
   installDoubleClickGuard(K);
   installNodeSetter(K);
   installAtomOnlyNodePicker(K);
+  installPeriodicTablePicker(
+    K,
+    (apply, currentSymbol) => callbacks.onRequestElementPick?.(apply, currentSymbol) ?? false,
+  );
 
   let destroyed = false;
   const composer = new K.Editor.Composer(host);

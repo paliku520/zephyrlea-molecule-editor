@@ -24,6 +24,8 @@ npm run preview
 
 - 由 React 挂载的全屏 Kekule `Composer`，并隐藏 Kekule 自带的全部工具栏。
 - 使用 React + Tailwind 自绘顶栏、元素快捷条与左侧垂直工具栏。
+- **页眉**：最上方是一条固定页眉，左侧是产品名 `ZephyrLea's Molecular Editor` 与紧邻的「关于」按钮，右侧是跳转 GitHub 仓库（`paliku520/zephyrlea-molecule-editor`，新标签页打开）的按钮；页眉常驻顶部，不受工具栏「顶部 / 底部」设置影响。
+- **关于窗口**：「关于」按钮打开关于弹窗，内容包括产品简介、核心技术栈、MIT 开源协议（点「查看完整协议」可在页面内直接阅读 `LICENSE` 全文，无需跳转）与作者信息，底部附 GitHub 仓库链接；`Esc`、遮罩与「关闭」都能关掉它。
 - 通过 Kekule 的交互控制器 API 切换绘制模式（`MolBondIaController`、`MolRingIaController`、`MolNodeChargeIaController`、`SelectIaController` 等），而不是重新实现绘图逻辑。
 - 单键 / 双键 / 三键 / 楔形键（向上）/ 虚楔键（向下）/ 配位键 / 未知立体键、正负电荷（圆圈内加减号图标）、元素原子、R 基团以及各类环模板。
 - 元素工具既能插入也能替换：选中元素后点击空白处插入新原子，点击画布上已有的原子则**就地替换该原子的元素**（化学键与相邻原子保持不变，可撤销）。
@@ -44,6 +46,7 @@ npm run preview
 - 工具栏默认**置底**：画布贴近窗口顶部，向下依次是元素条（C / H / N / O…，下拉菜单向上弹出）、绘图工具栏（横排，窄窗口自动换行）与操作栏（SMILES / 整理视图 / 整理结构 / 缩放 / 导出 / 设置），在大屏幕上鼠标移动距离更短；切到「顶部」则恢复「顶部操作栏 + 左侧竖直工具栏」的经典布局。浮动操作栏与提示会自动避让底部控制区。
 - Kekule 暗色渲染主题（原子与化学键为浅色），并通过抗锯齿与 2 倍超采样让线条更平滑。
 - 双击弹出的原子标签输入框也重绘为暗色（元素按钮、下拉箭头、滚动条）；它只提供原子（元素与 R 基团），不再内置 `Ph`、`NO2` 之类的预置取代基模板——那套缩写结构模板难以与编辑器其余部分保持同步，需要时请直接绘制结构。**R 基团同样支持双击编辑**：双击画布上的 `R` 会打开标签输入框，输入 `R`、`R1`、`R2` 等即可改名（保持为 R 基团，SMILES 仍写作 `*`），输入元素符号则把该 R 就地替换成对应原子；双击时不会再顺带选中原子，浮动操作栏也不会挡住弹窗。
+- **元素周期表**：元素条「其他」菜单底部的「元素周期表…」，以及双击标签框下拉里的「…」，都会打开同一张自绘周期表（替换掉 Kekule 原生、不跟随主题的表）。118 种元素按标准长式排布，格子等宽、符号水平居中、左上角为原子序数，镧系 / 锕系占位（`57-71`、`89-103`）与同行元素并排，元素颜色与画布标签一致，当前元素高亮；弹窗层级高于 Kekule 的弹层（双击时不会被原子标签框挡住）。点选后「其他」入口只切换元素工具，双击入口则当场替换该原子。`Esc`、点击遮罩或「取消」关闭，深色 / 浅色主题都适用。
 - 双击唤起该面板只在**选择 / 套索**工具下生效；使用加电荷、元素、化学键、橡皮擦等工具时，快速连续点击同一个原子只会重复该操作（例如连点两下得到 `2+`），不会弹出替换面板。
 - 原子标签按元素着色：N 蓝、O 红、S 黄、P 橙、卤素绿/紫等，与顶部元素条共用同一套配色；碳骨架保持浅灰，悬停与选中标记使用主题色。
 - 带电原子（离子）显示为「元素符号 + 上标电荷」（`C⁺`、`CH₃⁺`、`NH₂⁺`、`O⁻`），而不是一个悬空在原子旁边的电荷符号：电荷与自由基并入原子标签、标签固定水平排列，平时不标注的碳在带电后也会显示元素符号。
@@ -58,15 +61,20 @@ npm run preview
 ```text
 public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
 src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
+src/components/AppHeader.tsx  页眉：标题、关于入口与 GitHub 仓库跳转
+src/components/AboutModal.tsx 关于弹窗：简介、技术栈、MIT 协议全文与作者（`LICENSE?raw` 内联）
 src/components/icons/       自定义 SVG 化学图标
 src/lib/editorBridge.ts     Kekule Composer 生命周期、工具切换、SMILES 读写、自适应视图
 src/lib/editorBoard.ts      绘制面尺寸、无限平移（内容重定位）与缩放后的重新居中
 src/lib/kekuleSpace.ts      Kekule 化学空间查询工具（分子、包围盒、滚动容器、坐标比例）
 src/lib/kekuleBondStyle.ts  化学键线宽 / 双键间距 / 环内双键朝向的渲染补丁
 src/lib/kekuleElectronLabel.ts  把电荷 / 自由基并入原子标签的渲染补丁（离子显示）
-src/lib/kekuleNodeSetter.ts  R 基团的双击标签编辑（SubGroup 注册到原子编辑器）与仅原子选择面板
+src/lib/kekuleNodeSetter.ts  R 基团的双击标签编辑（SubGroup 注册到原子编辑器）、仅原子选择面板与自绘周期表的接管
+src/lib/periodicTable.ts    元素周期表的符号表与标准长式布局（118 种元素）
+src/components/PeriodicTableModal.tsx  自绘元素周期表弹窗（元素条与双击标签框共用）
 src/lib/elementColors.ts    深色 / 浅色两套元素配色（界面与画布共用）
 src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
+src/lib/site.ts             页眉与关于弹窗共用的仓库链接
 src/lib/boardPersistence.ts 画板自动保存 / 恢复（结构 molblock、原子坐标、缩放与视口位置）
 src/lib/rdkit.ts            RDKit WASM 加载、分子式 / 描述符分析、化学问题检测与开发模式自检入口
 src/lib/structureValidation.ts  分析 + 校验结果模型、价键错误归类与中文说明
@@ -94,6 +102,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - Kekule 会把形式电荷/自由基画成独立的 `ChemMarker` 对象、停在原子四周「最空」的方向，同时让未标注的碳不显示元素符号——于是阳离子只剩下一个悬空的「+」。`src/lib/kekuleElectronLabel.ts` 关闭这种自动生成的标记，把电荷/自由基并入原子标签作为上标（氢写在电荷之前，显示 `CH₃⁺` 而不是 `C⁺H₃`），对带电原子强制绘制并水平排布标签，并屏蔽已经由标签表达的标记，避免重复绘制。
 - 启动和清空画布时，视图居中于绘制面；同时自动扩大绘制面以覆盖整个视口，保证任意方向都能平移，不会卡在边缘。窗口尺寸变化时保留当前滚动位置。
 - R 基团在 Kekule 里是 `Kekule.SubGroup`（`RGroup` 只是它的别名），它有两个副作用：面板注册表里**没有**它的双击编辑器（双击无反应），而绘制 `SubGroup` 时只要被「展开」就会因为内部没有原子而完全不可见。`src/lib/kekuleNodeSetter.ts` 把原子的内联编辑器注册给 `SubGroup`，并把输入框的值（`R`、`R1`…）改写回 `abbr`，因此 R 基团既可双击改名，也可输入元素符号就地替换；`editorBridge.ts` 的 `expandCollapsedGroups()` 只展开**含有原子**的 `SubGroup`（预置缩写基团），R 基团保持收起状态才会画出 `R` 标签。双击面板中的预置取代基模板（`Ph`、`NO2`…）已移除，元素与 R 基团之外一律自行绘制。
+- 双击面板的「…」（更多）按钮原本会弹出 Kekule 自带的周期表窗口，那套窗口不跟随应用的深色 / 浅色主题。`installPeriodicTablePicker()` 覆写 `StructureNodeSelectPanel._openPeriodicTableDialog`：普通元素选择改由 React 的自绘周期表接管（`PeriodicTableModal`），选中后仍走 Kekule 的 `doValueChanged()`，与原生流程一样落到 `applySetter`，因此就地替换、撤销都可以正常工作；只有「变量原子列表」（`isVarList` / `isVarNotList`）需要多选，继续沿用原生窗口。React 侧通过 `EditorBridgeCallbacks.onRequestElementPick` 拿到请求，没有监听者时自动回退原生窗口。
 - 「无限画布」：绘制面本身按视口的 4 倍展开（不小于 2600 渲染像素，单边最多 4608 渲染像素，避免多层 canvas 占用过多内存）。当平移靠近绘制面边界时，会把整幅结构整体挪回中央，并同步补偿滚动量，所以画面看起来完全不动，但可以一直朝任意方向平移；移动范围由结构本身兜底，结构永远不会被画到画布之外（多余空间会先自动扩大绘制面，达到上限后平移停在该方向）。
 - 缩放、双击缩放或手势缩放后，会把结构重新放回绘制面中央（同样补偿滚动），因此在任何缩放级别都能向上下左右继续平移。绘制面尺寸始终跟随缩放级别调整，既不会越界，也不会随缩放无限膨胀。
 - 缩放上下限写在 `src/lib/editorBoard.ts`（`MIN_ZOOM` / `MAX_ZOOM`），通过对 `editor.zoomTo` 的包装统一钳制，因此按钮、滚轮、手势、双击与程序化适配（整理 / 适应画布）都走同一套边界。

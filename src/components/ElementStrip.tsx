@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, TableProperties } from 'lucide-react';
 import type { ToolId } from '../lib/editorBridge';
 import { getDefaultElementColor, getElementColors } from '../lib/elementColors';
 import type { ThemeMode } from '../lib/settings';
@@ -9,6 +9,8 @@ interface ElementStripProps {
   theme: ThemeMode;
   activeTool: ToolId | null;
   onSelectElement: (symbol: string) => void;
+  /** Open the full periodic table picker. */
+  onOpenPeriodicTable: () => void;
   /** `bottom` docks the strip along the bottom edge; its menu opens upwards. */
   placement?: 'top' | 'bottom';
 }
@@ -48,6 +50,7 @@ export function ElementStrip({
   theme,
   activeTool,
   onSelectElement,
+  onOpenPeriodicTable,
   placement = 'top',
 }: ElementStripProps) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -140,6 +143,21 @@ export function ElementStrip({
                   </button>
                 );
               })}
+            </div>
+
+            <div className="mt-1.5 border-t border-line pt-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onOpenPeriodicTable();
+                }}
+                title="打开元素周期表选择元素"
+                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md text-[12px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink"
+              >
+                <TableProperties size={13} strokeWidth={1.8} />
+                元素周期表…
+              </button>
             </div>
           </div>
         )}

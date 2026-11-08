@@ -10,6 +10,61 @@ interface PickerPatchFlags {
   __zephyrleaAtomOnlyPicker?: boolean;
 }
 
+interface PeriodicTablePatchFlags {
+  __zephyrleaPeriodicTable?: boolean;
+}
+
+/**
+ * Kekule opens its own unthemed periodic table dialog from the "…" button of the
+ * dropdown, which is the only way to reach the rest of the elements. Swap in the
+ * app's picker: `requestPick` returns false when nothing is listening, and the
+ * native dialog is used as a fallback.
+ */
+export function installPeriodicTablePicker(
+  K: KekuleNamespace,
+  requestPick: (
+    apply: (symbol: string) => void,
+    currentSymbol: string | null,
+  ) => boolean,
+) {
+  const panelProto = K.ChemWidget?.StructureNodeSelectPanel?.prototype as
+    | (PeriodicTablePatchFlags & {
+        _openPeriodicTableDialog?: AnyFn;
+        getActiveNode?: AnyFn;
+        generateSelectableDataFromElementSymbol?: AnyFn;
+        doValueChanged?: AnyFn;
+      })
+    | undefined;
+  if (!panelProto || panelProto.__zephyrleaPeriodicTable) return;
+
+  const openDialog = panelProto._openPeriodicTableDialog;
+  if (typeof openDialog !== 'function') return;
+
+  panelProto.__zephyrleaPeriodicTable = true;
+  panelProto._openPeriodicTableDialog = function patchedOpenPeriodicTable(
+    button: any,
+    onDialogClosed: any,
+    options: any,
+  ) {
+    // Variable atom lists need Kekule's multi-select table.
+    if (options?.isVarList || options?.isVarNotList) {
+      return openDialog.call(this, button, onDialogClosed, options);
+    }
+
+    const active = this.getActiveNode?.();
+    const node = Array.isArray(active) ? active[0] : active;
+    const currentSymbol = node instanceof K.Atom ? node.getSymbol?.() ?? null : null;
+
+    const handled = requestPick((symbol) => {
+      const data = this.generateSelectableDataFromElementSymbol?.(symbol);
+      if (data) this.doValueChanged?.(data);
+    }, currentSymbol);
+
+    if (handled) return undefined;
+    return openDialog.call(this, button, onDialogClosed, options);
+  };
+}
+
 /** Labels an R group can carry: "R", "R1", "R2" … */
 const R_GROUP_LABEL = /^R\d*$/i;
 
