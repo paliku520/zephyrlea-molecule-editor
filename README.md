@@ -134,3 +134,9 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - `Ctrl/⌘ + Z` —— 撤销
 - `Ctrl/⌘ + Shift + Z` —— 重做
 - `Enter` —— 载入顶栏中的 SMILES
+
+## 开源协议
+
+本项目基于 [MIT 协议](LICENSE) 发布。
+
+Copyright (c) 2026 paliku520（云野风云ZephyrLea.）

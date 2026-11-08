@@ -132,3 +132,9 @@ src/index.css               Tailwind entry + Kekule dark-shell overrides
 - `Ctrl/⌘ + Z` — undo
 - `Ctrl/⌘ + Shift + Z` — redo
 - `Enter` — load the SMILES in the top bar
+
+## License
+
+Released under the [MIT License](LICENSE).
+
+Copyright (c) 2026 paliku520 (云野风云ZephyrLea.)
