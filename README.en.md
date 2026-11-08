@@ -34,6 +34,7 @@ npm run preview
 - Undo / redo, zoom, reset zoom, clear, keyboard shortcuts.
 - Canvas zoom is clamped to 40%–400% (Kekule itself has no bounds): once a limit is reached further clicks change nothing and the matching zoom button in the top bar becomes disabled. Buttons, wheel and gestures all share the same clamp, and Reset Zoom picks its best ratio inside that range.
 - A practically endless canvas: the drawing surface is far larger than the viewport, and panning near its border silently moves the whole drawing back to the middle, so you can keep panning in any direction while nothing is ever drawn outside the canvas.
+- **Board persistence**: structures, their relative placement, the zoom level and the pan position are auto-saved to `localStorage` (`zephyrlea.board`) and restored verbatim on reload, down to the same zoom and viewport position. **Clear** also drops the stored drawing, so it does not come back after a refresh.
 - One theme color: `--color-accent` (`#89B5FA` in the dark theme) in `src/index.css` drives the export button, input focus ring, toast icons and the R-group button.
 - The **Settings** button opens a modal whose five rows stay one line each: the **dark / light** theme switch, a **toolbar position** choice (bottom / top, default **bottom**), the **3D model style** (ball-and-stick / space-filling / stick / wireframe, default **ball-and-stick**), the **3D toolbar position** (left / centre / right, default **centre**) and a **hide carbon/hydrogen atoms** toggle. Each row keeps a single short caption and moves the longer explanation into a hover tooltip; both 3D settings are rows of icon buttons whose names appear on hover. The theme covers the whole shell, the Kekule canvas (atom/bond colours and the element palette) and the Kekule popups; hiding carbon/hydrogen draws a skeletal structure (carbons unlabelled, hydrogens only where needed), while turning it off labels every carbon and hydrogen count. Settings persist in `localStorage`.
 - The chrome is **docked at the bottom by default**: the canvas sits flush with the top of the window, and below it come the element strip (C / H / N / O…, its menu opens upwards), the drawing tool rail (one horizontal strip that wraps on narrow windows) and the action bar (SMILES / Clean Up / zoom / export / settings) — a much shorter pointer trip on tall screens. Choosing "top" restores the classic top bar + left rail layout. The floating selection bar and toasts keep clear of the docked chrome.
@@ -61,6 +62,7 @@ src/lib/kekuleBondStyle.ts  Render patch: bond stroke width, double-bond spacing
 src/lib/kekuleElectronLabel.ts  Render patch: fold charges/radicals into atom labels
 src/lib/elementColors.ts    Dark and light element palettes (shell + canvas)
 src/lib/settings.ts         Settings model, localStorage persistence, theme application
+src/lib/boardPersistence.ts Board auto-save / restore (molblocks, atom coords, zoom and viewport)
 src/lib/rdkit.ts            RDKit WASM loader, chemistry-problem detection, dev self-test
 src/lib/structureValidation.ts  Validation model, valence classification, Chinese copy
 src/lib/conformer3d.ts      sci-form-wasm loader, 3D conformer generation, molblock serialization
@@ -90,6 +92,14 @@ src/index.css               Tailwind entry + Kekule dark-shell overrides
 - Zooming (buttons, double click or gestures) re-anchors the drawing in the middle of the surface with the same scroll compensation, so panning stays available at every zoom level, and the surface is re-sized for the new zoom instead of growing without bound.
 - The zoom bounds live in `src/lib/editorBoard.ts` (`MIN_ZOOM` / `MAX_ZOOM`) and are enforced by wrapping `editor.zoomTo`, so buttons, wheel, gestures, double click and programmatic fits (Clean Up / Reset Zoom) all share one limit.
 - The composer's `change` events drive the React empty-canvas hint; no DOM outside the host is managed by Kekule.
+
+## Board persistence notes
+
+- The drawing is stored under the `zephyrlea.board` key in `localStorage` (`src/lib/boardPersistence.ts`), kept apart from the settings key (`zephyrlea.settings`). It is written when the content changes, when the zoom changes, when the page is hidden (`pagehide` / `visibilitychange`) or when the editor is torn down; edits are debounced by 600 ms so drawing a bond does not serialize the document on every stroke.
+- Each structure is saved as a **V2000 molfile** (`Kekule.IO.saveFormatData(mol, 'mol')`) together with the **absolute coordinate of every atom**: a molfile only keeps atom positions relative to each other, while the editor moves whole fragments around (changing the fragment's own coordinate), so both are needed to keep the structures' relative placement. On restore, `K.IO.loadFormatData` parses the molfile, the fragment offset is reset to zero, the saved coordinates are written back, and the fragments are appended to the chemical space.
+- The view is stored as the **viewport centre relative to the centre of the drawing bounds**, not as an absolute coordinate: layout passes shift the drawing around (re-centring, surface growth), which invalidates absolute coordinates while a relative offset survives. Restoring applies the zoom first, then positions the view from the current bounds, and repeats that at 140 / 400 / 800 ms because Kekule resets the scroll asynchronously after layout work.
+- Loading a structure makes Kekule auto-scale the surface to that structure's bond length (`objScreenLengthRatio` = `defAutoScaleRefLength` / `defBondLength`). Restoring the fragments alone falls back to the default scale, which renders the drawing ~1.9× larger than before the refresh, so both numbers are stored and put back before the surface size is recomputed.
+- Restore runs after the first layout pass (`composer.resized()`): append the fragments, restore the scale and zoom, then position the viewport. Without a stored snapshot the editor keeps its original "centre the empty surface" behaviour.
 
 ## RDKit validation notes
 

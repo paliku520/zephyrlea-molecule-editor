@@ -27,6 +27,8 @@ const MIN_RECENTER_PX = 12;
 const CONTENT_FIT_DELAY_MS = 260;
 /** Scroll events caused by our own layout work are ignored for this long. */
 const LAYOUT_SETTLE_MS = 160;
+/** Kekule resets the scroll after layout work, so a restored view is re-applied. */
+const ANCHOR_RESTORE_DELAYS_MS = [140, 400, 800];
 
 /**
  * Zoom is a multiplier of the default bond screen length. Kekule itself has no
@@ -48,6 +50,8 @@ export interface EditorBoard {
   rebalance(options?: { preserveViewCenter?: boolean }): void;
   centerView(): void;
   centerEmptyView(): void;
+  /** Center the viewport on `offset` away from the middle of the drawing. */
+  centerOnContentOffset(offset: { x: number; y: number }): void;
   notifyContentChanged(): void;
   /** Drop restores queued by a zoom or resize, e.g. before re-centering by hand. */
   clearPendingRestores(): void;
@@ -212,6 +216,34 @@ export function createEditorBoard(
     pauseScrollTracking();
     if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
     if (scroller.scrollTop !== top) scroller.scrollTop = top;
+  };
+
+  /**
+   * Put the point `offset` away from the middle of the drawing in the middle of
+   * the viewport. Layout passes move the drawing between the retries, so the
+   * anchor is rebuilt from the current bounding box every time.
+   */
+  const centerOnContentOffset = (offset: { x: number; y: number }) => {
+    if (disposed) return;
+
+    const restorePosition = () => {
+      if (disposed) return;
+
+      const box = getUnionBox(K, getMolecules(K, composer));
+      if (!box) return;
+
+      applyAnchor({
+        x: (box.x1 + box.x2) / 2 + offset.x,
+        y: (box.y1 + box.y2) / 2 + offset.y,
+      });
+    };
+
+    pauseScrollTracking();
+    restorePosition();
+    window.requestAnimationFrame(restorePosition);
+    for (const delay of ANCHOR_RESTORE_DELAYS_MS) {
+      window.setTimeout(restorePosition, delay);
+    }
   };
 
   /**
@@ -513,6 +545,7 @@ export function createEditorBoard(
     rebalance,
     centerView,
     centerEmptyView,
+    centerOnContentOffset,
     notifyContentChanged: scheduleContentFit,
     clearPendingRestores: () => {
       pendingAnchors = [];

@@ -1,5 +1,9 @@
 import type { EditorBoard } from './editorBoard';
 import { createEditorBoard, MIN_ZOOM } from './editorBoard';
+import {
+  installBoardPersistence,
+  type BoardPersistence,
+} from './boardPersistence';
 import { ATOMIC_NUMBER_LIMIT, getDefaultElementColor, getElementColors } from './elementColors';
 import { installGroupNameTranslations } from './groupNames';
 import type { KekuleNamespace } from './kekule';
@@ -1062,9 +1066,15 @@ export function createEditorBridge(
   applyUiMarkerTheme(composer);
 
   const editor = composer.getEditor();
+  let persistence: BoardPersistence | null = null;
   const board = createEditorBoard(K, composer, {
-    onZoomChange: (zoom) => callbacks.onZoomChange?.(zoom),
+    onZoomChange: (zoom) => {
+      callbacks.onZoomChange?.(zoom);
+      // The zoom level is part of the persisted view.
+      persistence?.scheduleSave();
+    },
   });
+  persistence = installBoardPersistence(K, composer, editor, board);
 
   installElementReplace(K, editor);
   installGroupNameTranslations(K);
@@ -1094,6 +1104,7 @@ export function createEditorBridge(
       contentRevision += 1;
       callbacks.onContentChange?.(hasContent(), contentRevision);
       board.notifyContentChanged();
+      persistence?.scheduleSave();
     });
   };
 
@@ -1325,6 +1336,10 @@ export function createEditorBridge(
       composer.newDoc?.();
       repaint();
       board.centerEmptyView();
+      // An explicit clear must not come back after a refresh: write the empty
+      // board right away and once more after deferred change events settle.
+      persistence?.save();
+      persistence?.scheduleSave();
     },
     readSelection() {
       return createSelectionSnapshot(editor);
@@ -1446,6 +1461,8 @@ export function createEditorBridge(
     },
     destroy() {
       destroyed = true;
+      persistence?.dispose();
+      persistence = null;
       disposeClickSelection();
       board.dispose();
       editor.removeEventListener?.('change', notifyContentChange);
@@ -1475,8 +1492,11 @@ export function createEditorBridge(
     if (destroyed) return;
     composer.resized?.();
     applyTool(K, composer, 'single');
+
+    const restored = persistence?.restore() ?? false;
     repaint();
-    board.centerEmptyView();
+    if (!restored) board.centerEmptyView();
+
     callbacks.onContentChange?.(hasContent(), contentRevision);
     callbacks.onZoomChange?.(editor.getCurrZoom?.() ?? 1);
   });
