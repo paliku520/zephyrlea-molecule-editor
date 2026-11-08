@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Box, RotateCcw, X } from 'lucide-react';
-import type { GLViewer } from '3dmol';
+import type { AtomStyleSpec, GLViewer } from '3dmol';
 import { computeConformer, type Conformer3D } from '../lib/conformer3d';
-import type { ThemeMode } from '../lib/settings';
+import type { Model3DStyle, ThemeMode } from '../lib/settings';
+import { Model3DSwitch } from './Model3DSwitch';
 
 type ThreeDmolModule = typeof import('3dmol');
 
@@ -10,6 +11,8 @@ interface Viewer3DModalProps {
   open: boolean;
   smiles: string;
   theme: ThemeMode;
+  modelStyle: Model3DStyle;
+  onModelStyleChange: (style: Model3DStyle) => void;
   onClose: () => void;
 }
 
@@ -17,6 +20,34 @@ type Stage = 'loading' | 'ready' | 'error';
 
 /** Deterministic so the same structure always yields the same conformer. */
 const CONFORMER_SEED = 42;
+
+/**
+ * Thin sticks keep single bonds light; the raised multi-bond scaling stops the
+ * double / triple bond cylinders from disappearing at that radius.
+ */
+const STICK_SPEC: AtomStyleSpec = {
+  stick: { radius: 0.15, doubleBondScaling: 0.55, tripleBondScaling: 0.45 },
+};
+
+const MODEL_STYLE_SPECS: Record<Model3DStyle, AtomStyleSpec> = {
+  'ball-stick': { ...STICK_SPEC, sphere: { scale: 0.3 } },
+  'space-fill': { sphere: { scale: 1 } },
+  stick: STICK_SPEC,
+  // WebGL caps `line` width at 1px, which all but disappears on a dark canvas,
+  // so the wireframe is drawn as hairline sticks instead.
+  wireframe: {
+    stick: { radius: 0.05, doubleBondScaling: 0.95, tripleBondScaling: 0.8 },
+  },
+};
+
+/**
+ * `zoomTo()` measures atom centres only, so the large space-filling spheres would
+ * end up touching the frame; pull the camera back for that style.
+ */
+function fitView(viewer: GLViewer, style: Model3DStyle) {
+  viewer.zoomTo();
+  if (style === 'space-fill') viewer.zoom(0.75);
+}
 
 const VIEWER_BACKGROUND: Record<ThemeMode, string> = {
   dark: '#171717',
@@ -40,11 +71,20 @@ function loadThreeDmol(): Promise<ThreeDmolModule> {
   return threeDmolPromise;
 }
 
-export function Viewer3DModal({ open, smiles, theme, onClose }: Viewer3DModalProps) {
+export function Viewer3DModal({
+  open,
+  smiles,
+  theme,
+  modelStyle,
+  onModelStyleChange,
+  onClose,
+}: Viewer3DModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<GLViewer | null>(null);
   const themeRef = useRef(theme);
   themeRef.current = theme;
+  const modelStyleRef = useRef(modelStyle);
+  modelStyleRef.current = modelStyle;
 
   const [stage, setStage] = useState<Stage>('loading');
   const [conformer, setConformer] = useState<Conformer3D | null>(null);
@@ -106,15 +146,8 @@ export function Viewer3DModal({ open, smiles, theme, onClose }: Viewer3DModalPro
 
         viewerRef.current = viewer;
         viewer.addModel(result.molblock, 'sdf');
-        viewer.setStyle({}, {
-          stick: {
-            radius: 0.15,
-            doubleBondScaling: 0.55,
-            tripleBondScaling: 0.45,
-          },
-          sphere: { scale: 0.3 },
-        });
-        viewer.zoomTo();
+        viewer.setStyle({}, MODEL_STYLE_SPECS[modelStyleRef.current]);
+        fitView(viewer, modelStyleRef.current);
         viewer.render();
 
         setConformer(result);
@@ -155,6 +188,17 @@ export function Viewer3DModal({ open, smiles, theme, onClose }: Viewer3DModalPro
     viewer.setBackgroundColor(VIEWER_BACKGROUND[theme], 1);
     viewer.render();
   }, [theme, stage]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || stage !== 'ready') return;
+
+    // Only the style and the camera distance change, so the angle the user
+    // rotated to is kept; re-fitting stops space-filling spheres from clipping.
+    viewer.setStyle({}, MODEL_STYLE_SPECS[modelStyle]);
+    fitView(viewer, modelStyle);
+    viewer.render();
+  }, [modelStyle, stage]);
 
   if (!open) return null;
 
@@ -207,9 +251,19 @@ export function Viewer3DModal({ open, smiles, theme, onClose }: Viewer3DModalPro
           />
 
           {stage === 'ready' && (
-            <p className="pointer-events-none absolute bottom-3 left-4 text-[11px] leading-relaxed text-ink-faint">
-              当前 3D 构象由本地算法生成，仅供参考
-            </p>
+            <>
+              <p className="pointer-events-none absolute bottom-3 left-4 text-[11px] leading-relaxed text-ink-faint">
+                当前 3D 构象由本地算法生成，仅供参考
+              </p>
+
+              <div className="absolute bottom-3 right-4">
+                <Model3DSwitch
+                  value={modelStyle}
+                  onChange={onModelStyleChange}
+                  floating
+                />
+              </div>
+            </>
           )}
 
           {stage === 'loading' && (

@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Moon, PanelBottom, PanelTop, Sun, X } from 'lucide-react';
 import type { AppSettings, ThemeMode, ToolbarPlacement } from '../lib/settings';
+import { Model3DSwitch } from './Model3DSwitch';
 
 interface SettingsModalProps {
   open: boolean;
@@ -67,7 +68,8 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
         <div className="flex flex-col gap-1 px-2.5 py-2.5">
           <SettingRow
             title="外观主题"
-            description="深色适合长时间绘图，浅色更适合截图与打印预览。"
+            description="界面与画布配色。"
+            hint="深色适合长时间绘图，浅色更适合截图与打印预览。"
             control={
               <SegmentedControl
                 label="外观主题"
@@ -82,7 +84,8 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
 
           <SettingRow
             title="工具栏位置"
-            description="大屏幕上可把操作栏与绘图工具栏一起放到窗口底部，鼠标移动距离更短。"
+            description="顶部或底部停靠。"
+            hint="大屏幕上可把操作栏与绘图工具栏一起放到窗口底部，鼠标移动距离更短。"
             control={
               <SegmentedControl
                 label="工具栏位置"
@@ -96,8 +99,23 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
           <div className="mx-3 h-px bg-line" />
 
           <SettingRow
+            title="3D 模型样式"
+            description="3D 视图的默认显示方式。"
+            hint="球棍（默认）、空间填充、棍状、线框；悬停下方图标可看名称，也可在 3D 窗口内切换。"
+            control={
+              <Model3DSwitch
+                value={settings.model3DStyle}
+                onChange={(model3DStyle) => onChange({ ...settings, model3DStyle })}
+              />
+            }
+          />
+
+          <div className="mx-3 h-px bg-line" />
+
+          <SettingRow
             title="隐藏碳/氢原子"
-            description="开启后按骨架式绘制：碳原子不标注，氢原子仅在需要时显示；关闭后显示全部原子与氢的数量。"
+            description="骨架式绘制。"
+            hint="开启后碳原子不标注、氢原子仅在需要时显示；关闭后显示全部原子与氢的数量。"
             control={
               <button
                 type="button"
@@ -139,12 +157,17 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
 interface SettingRowProps {
   title: string;
   description: string;
+  /** Longer explanation; shown on hover so the modal stays compact. */
+  hint?: string;
   control: ReactNode;
 }
 
-function SettingRow({ title, description, control }: SettingRowProps) {
+function SettingRow({ title, description, hint, control }: SettingRowProps) {
   return (
-    <div className="flex items-center gap-4 rounded-xl px-2.5 py-3">
+    <div
+      className="flex items-center gap-4 rounded-xl px-2.5 py-3"
+      title={hint}
+    >
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-ink">{title}</p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-ink-muted">{description}</p>

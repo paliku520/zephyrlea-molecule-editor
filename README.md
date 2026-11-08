@@ -29,7 +29,7 @@ npm run preview
 - 元素工具既能插入也能替换：选中元素后点击空白处插入新原子，点击画布上已有的原子则**就地替换该原子的元素**（化学键与相邻原子保持不变，可撤销）。
 - 通过 `Kekule.IO.saveFormatData(model, 'smi')` 导出 SMILES，结果保存在 React state 中并复制到剪贴板。
 - **结构校验（RDKit）**：每次编辑后用 RDKit（`@rdkit/rdkit` 的 WebAssembly 构建）检查画布上的每个结构，右侧「结构校验」面板实时显示结果（可收起为窄条）。出现价键异常（例如五价碳）时，面板列出中文说明与 RDKit 原始报错，画布上用红圈标出问题原子，同时禁用「整理」与「在 3D 中查看」，结构修正后自动恢复；非价键类的提示列在「其他提示」中，不会禁用按钮。
-- **3D 视图**：顶栏「在 3D 中查看」打开模态窗口，用本地 WASM 引擎（`sci-form-wasm`）从当前画布的 SMILES 现场生成 3D 构象（固定 seed，同一结构结果一致），再用 3Dmol.js 以球棍模型渲染；双键 / 三键按两条 / 三条平行柱绘制，芳香环画成「实线 + 环内虚线」的大 π 键。背景随主题切换（深色 `#171717` / 浅色 `#ffffff`），可拖拽旋转、滚轮缩放，角落标注「当前 3D 构象由本地算法生成，仅供参考」；关闭窗口时销毁 viewer，反复开关不会累积 canvas 或泄漏显存。存在价键错误或画布为空时不会打开。当前版本不访问 PubChem 等外部接口，全部计算在浏览器内完成。
+- **3D 视图**：顶栏「在 3D 中查看」打开模态窗口，用本地 WASM 引擎（`sci-form-wasm`）从当前画布的 SMILES 现场生成 3D 构象（固定 seed，同一结构结果一致），再用 3Dmol.js 渲染；双键 / 三键按两条 / 三条平行柱绘制，芳香环画成「实线 + 环内虚线」的大 π 键。显示方式可在「球棍（默认）/ 空间填充 / 棍状 / 线框」之间切换（3D 窗口右下角与设置弹窗都能改，两处同步）。背景随主题切换（深色 `#171717` / 浅色 `#ffffff`），可拖拽旋转、滚轮缩放，角落标注「当前 3D 构象由本地算法生成，仅供参考」；关闭窗口时销毁 viewer，反复开关不会累积 canvas 或泄漏显存。存在价键错误或画布为空时不会打开。当前版本不访问 PubChem 等外部接口，全部计算在浏览器内完成。
 - 支持载入 SMILES 并生成高质量 2D 坐标，同时提供 **整理（Clean Up）**。由于 Kekule 1.0.4 只自带 SMILES 写入器、没有读取器和坐标生成器，这里按需懒加载 OpenChemLib 作为辅助。
 - 整理（Clean Up）会重排每个结构的坐标，并把画布上零散的结构**搬动**到屏幕中央：按原位置从上到下、从左到右排成整齐的行（多行时自动均衡行宽、行内垂直居中，间距一致），以当前视口中心为基准重排；缩放级别保持不变，只有排完仍放不下时才会缩小。单个结构已在屏幕内时不移动任何东西，只修正键角。
 - 支持打开 `.mol`、`.sdf`、`.cml`、`.rxn`、`.kcj`、`.json`、`.smi` 文件。
@@ -37,7 +37,7 @@ npm run preview
 - 画布缩放限制在 40%–400%（Kekule 本身没有上下限）：到达边界后继续点击不会再有变化，顶栏对应的「放大 / 缩小」按钮自动禁用；按钮、滚轮 / 手势等所有缩放路径共用同一个限制。「适应画布 / 重置缩放」也在该范围内取最佳比例。
 - 近乎无限的画布：绘制面远大于视口，靠近边界时自动把结构整体挪回中央，可以一直向任意方向平移，且结构始终留在画布内。
 - 主题色统一由 `src/index.css` 里的 `--color-accent`（`#89B5FA`）控制，用于导出按钮、输入框聚焦环、提示图标与 R 基团按钮。
-- 「设置」按钮打开设置弹窗（模态窗口）：可切换**深色 / 浅色**主题、**工具栏位置**（底部 / 顶部，默认**底部**），以及**是否隐藏碳/氢原子**。主题同时作用于整个界面、Kekule 画布的原子/键配色与双击弹出的选择面板；隐藏碳/氢原子开启时按骨架式绘制（碳不标注、氢仅在需要时显示），关闭后显示全部碳原子与氢的数量。设置保存在 `localStorage`，刷新后保持。
+- 「设置」按钮打开设置弹窗（模态窗口），四项设置都保持一行：**深色 / 浅色**主题、**工具栏位置**（底部 / 顶部，默认**底部**）、**3D 模型样式**（球棍 / 空间填充 / 棍状 / 线框，默认**球棍**）、**是否隐藏碳/氢原子**。说明文字只留一句，详细解释放在悬停提示里；3D 模型样式用四个图标按钮表示，鼠标悬停显示模式名称。主题同时作用于整个界面、Kekule 画布的原子/键配色与双击弹出的选择面板；隐藏碳/氢原子开启时按骨架式绘制（碳不标注、氢仅在需要时显示），关闭后显示全部碳原子与氢的数量。设置保存在 `localStorage`，刷新后保持。
 - 工具栏默认**置底**：画布贴近窗口顶部，向下依次是元素条（C / H / N / O…，下拉菜单向上弹出）、绘图工具栏（横排，窄窗口自动换行）与操作栏（SMILES / 整理 / 缩放 / 导出 / 设置），在大屏幕上鼠标移动距离更短；切到「顶部」则恢复「顶部操作栏 + 左侧竖直工具栏」的经典布局。浮动操作栏与提示会自动避让底部控制区。
 - Kekule 暗色渲染主题（原子与化学键为浅色），并通过抗锯齿与 2 倍超采样让线条更平滑。
 - 双击原子弹出的「原子 / 基团」选择面板与标签输入框也重绘为暗色（标签页、元素按钮、下拉箭头、滚动条）；「基团」页的预置取代基补上了中文名（`Me 甲基`、`Ph 苯基`、`OTs 对甲苯磺酰氧基`……，悬停提示为中文），选中后会把基团**展开成真实结构**（而不是只显示 `Ph`、`NO2` 之类的缩写），可以继续双击其中的原子继续替换；双击时不会再顺带选中原子，浮动操作栏不会挡住弹窗。
@@ -66,8 +66,9 @@ src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
 src/lib/rdkit.ts            RDKit WASM 加载、化学问题检测与开发模式自检入口
 src/lib/structureValidation.ts  校验结果模型、价键错误归类与中文说明
 src/lib/conformer3d.ts      sci-form-wasm 引擎加载、3D 构象生成与 molblock 序列化
-src/components/SettingsModal.tsx  设置弹窗（主题切换、隐藏碳/氢原子）
-src/components/Viewer3DModal.tsx  3D 视图弹窗（3Dmol.js 球棍渲染）
+src/components/SettingsModal.tsx  设置弹窗（主题切换、3D 模型样式、隐藏碳/氢原子）
+src/components/Model3DSwitch.tsx  3D 模型样式选择器（图标按钮，设置弹窗与 3D 视图共用）
+src/components/Viewer3DModal.tsx  3D 视图弹窗（3Dmol.js 球棍 / 空间填充 / 棍状 / 线框渲染）
 src/components/ValidationPanel.tsx  右侧「结构校验」面板
 src/components/ValidationOverlay.tsx  画布上标记问题原子的红圈层
 src/lib/moleculeLayout.ts   无坐标结构的纯 JS 兜底布局算法
@@ -105,12 +106,13 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 
 - 3D 构象由 `sci-form-wasm` 在浏览器内计算（不访问 PubChem 等外部接口）：先 `await init()` 初始化 WASM 模块，再 `JSON.parse(embed(smiles, 42))` 拿到 `{ num_atoms, coords, elements, bonds }`。`elements` 是原子序数数组，`coords` 是扁平化的 `x,y,z` 序列，`bonds` 是 `[起, 止, "SINGLE" | "DOUBLE" | "TRIPLE" | "AROMATIC"]` 三元组。
 - 结果被拼成 **V2000 molblock**（保留键级），交给 `viewer.addModel(molblock, 'sdf')`。只用 XYZ 的话格式里没有键信息，3Dmol 只能按距离猜键、并全部画成单键；molblock 带上了键级，3Dmol 就会自己把双键 / 三键画成两条 / 三条平行圆柱，芳香键则画成「实线 + 环内虚线」的大 π 键（`aromaticStyle: 'dashed'`，即默认样式）。
-- 渲染在 `viewer.setStyle({}, { stick: { radius: 0.15, doubleBondScaling: 0.55, tripleBondScaling: 0.45 }, sphere: { scale: 0.3 } })` 下进行：棍半径比 3Dmol 默认的 0.25 更细，单键看起来更轻，同时把多重键的比例系数调高，保证双键 / 三键的两条 / 三条平行柱仍然清晰可辨。背景由 `setBackgroundColor()` 跟随主题（深色 `#171717` / 浅色 `#ffffff`），最后 `zoomTo()` + `render()`。
+- 渲染样式由 `MODEL_STYLE_SPECS` 决定，分四种：**球棍**（`stick` + `sphere: { scale: 0.3 }`，默认）、**空间填充**（仅 `sphere: { scale: 1 }`，按范德华半径铺满）、**棍状**（仅 `stick`）、**线框**（半径 0.05 的细棍）。球棍与棍状用的是半径 0.15 的细棍（3Dmol 默认 0.25），单键更轻；同时把多重键比例提高到 `doubleBondScaling: 0.55` / `tripleBondScaling: 0.45`，细棍下双键 / 三键仍清晰可辨。线框没有用 3Dmol 的 `line` 样式，是因为 WebGL 的 `lineWidth` 在主流浏览器上被限制为 1px，在暗色背景上几乎看不见。
+- 切换样式只调用 `viewer.setStyle()` 再重新适配视图，不会重建模型，所以当前旋转角度保持不变；重新适配（`zoomTo()` + 空间填充时额外拉远 25%）是为了让更大的球体仍留在画面内。样式存在 `settings.model3DStyle`（`localStorage`），3D 窗口右下角的图标组与设置弹窗共用同一个 `Model3DSwitch` 组件，两处改动互相同步。
 - `sci-form-wasm` 的 `exports` 只暴露了 `.`、`./alpha`、`./beta`，wasm 二进制无法用子路径导入。`vite.config.ts` 里把 `sci-form-wasm/wasm` 别名到真实的 `sci_form_wasm_bg.wasm`，代码再用 `import wasmUrl from 'sci-form-wasm/wasm?url'` 取得资源地址并显式传给 `init({ module_or_path })`，开发与生产构建行为一致。
 - `embed()` 是同步 WASM 调用，会阻塞主线程；调用前先让出一帧（`requestAnimationFrame`），保证弹窗先画出「正在计算 3D 构象…」的加载态。
 - 3Dmol（约 570 KB）通过动态 `import('3dmol')` 懒加载，不进首屏包。它本身是 webpack 的 UMD 产物，导入时对 `default` 与命名空间两种互操作形态都做了兼容。
 - 关闭弹窗（或切换结构、点重试）时执行 `viewer.clear()` 并移除 canvas，viewer 引用置空，因此重复开关不会累积 canvas，也不会因为 WebGL 上下文过多而被浏览器回收。
-- `smiles` 与 `theme` 处理方式不同：`smiles` 变化会重建模型，主题变化只调用一次 `setBackgroundColor()`，避免切换主题时丢掉用户已经拖好的视角。
+- `smiles`、`theme` 与 `modelStyle` 的处理方式不同：`smiles` 变化会重建模型，主题变化只调用一次 `setBackgroundColor()`，样式变化只调用 `setStyle()`，因此切换主题或显示方式都不会丢掉用户已经拖好的视角。
 
 ## 键盘快捷键
 

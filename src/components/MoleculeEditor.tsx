@@ -606,6 +606,8 @@ export function MoleculeEditor() {
         open={viewer3DOpen}
         smiles={viewer3DSmiles}
         theme={settings.theme}
+        modelStyle={settings.model3DStyle}
+        onModelStyleChange={(model3DStyle) => setSettings((current) => ({ ...current, model3DStyle }))}
         onClose={() => setViewer3DOpen(false)}
       />
     </div>

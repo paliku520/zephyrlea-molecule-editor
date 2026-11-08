@@ -161,3 +161,43 @@ export function CyclooctaneIcon(props: ChemIconProps) {
     </ChemSvg>
   );
 }
+
+/** 3D display styles: two small balls on a stick. */
+export function BallStickModelIcon(props: ChemIconProps) {
+  return (
+    <ChemSvg {...props}>
+      <path d="M8.6 15.4 15.4 8.6" />
+      <circle cx="7" cy="17" r="3.1" />
+      <circle cx="17" cy="7" r="2.4" />
+    </ChemSvg>
+  );
+}
+
+/** Space-filling: balls that touch each other. */
+export function SpaceFillModelIcon(props: ChemIconProps) {
+  return (
+    <ChemSvg {...props}>
+      <circle cx="8.4" cy="14.6" r="5.1" />
+      <circle cx="16.6" cy="8.6" r="4.1" />
+    </ChemSvg>
+  );
+}
+
+/** Stick only: a line with no atom balls. */
+export function StickModelIcon(props: ChemIconProps) {
+  return (
+    <ChemSvg {...props}>
+      <path d="M5.2 18.8 18.8 5.2" strokeWidth={3.4} />
+    </ChemSvg>
+  );
+}
+
+/** Wireframe: a bare skeleton with joints. */
+export function WireframeModelIcon(props: ChemIconProps) {
+  return (
+    <ChemSvg {...props}>
+      <path d="M4.6 17.6 10.6 7.4l8.8 2.2-4.6 8.6Z" />
+      <path d="M10.6 7.4v10.8" />
+    </ChemSvg>
+  );
+}
