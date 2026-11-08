@@ -1,6 +1,22 @@
 import { useEffect, type ReactNode } from 'react';
-import { Moon, PanelBottom, PanelTop, Sun, X } from 'lucide-react';
-import type { AppSettings, ThemeMode, ToolbarPlacement } from '../lib/settings';
+import {
+  AlignHorizontalJustifyCenter,
+  AlignHorizontalJustifyEnd,
+  AlignHorizontalJustifyStart,
+  Moon,
+  PanelBottom,
+  PanelTop,
+  Sun,
+  X,
+} from 'lucide-react';
+import {
+  VIEWER_3D_TOOLBAR_OPTIONS,
+  type AppSettings,
+  type ThemeMode,
+  type ToolbarPlacement,
+  type Viewer3DToolbarAlign,
+} from '../lib/settings';
+import { IconRadioFrame, IconRadioGroup, type IconRadioOption } from './ui/IconRadioGroup';
 import { Model3DSwitch } from './Model3DSwitch';
 
 interface SettingsModalProps {
@@ -19,6 +35,16 @@ const PLACEMENT_OPTIONS: { value: ToolbarPlacement; label: string; icon: typeof 
   { value: 'top', label: '顶部', icon: PanelTop },
   { value: 'bottom', label: '底部', icon: PanelBottom },
 ];
+
+const ALIGN_ICONS: Record<Viewer3DToolbarAlign, typeof Sun> = {
+  left: AlignHorizontalJustifyStart,
+  center: AlignHorizontalJustifyCenter,
+  right: AlignHorizontalJustifyEnd,
+};
+
+const ALIGN_OPTIONS: IconRadioOption<Viewer3DToolbarAlign>[] = VIEWER_3D_TOOLBAR_OPTIONS.map(
+  (option) => ({ ...option, icon: ALIGN_ICONS[option.value] }),
+);
 
 export function SettingsModal({ open, settings, onChange, onClose }: SettingsModalProps) {
   useEffect(() => {
@@ -107,6 +133,26 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
                 value={settings.model3DStyle}
                 onChange={(model3DStyle) => onChange({ ...settings, model3DStyle })}
               />
+            }
+          />
+
+          <div className="mx-3 h-px bg-line" />
+
+          <SettingRow
+            title="3D 工具栏位置"
+            description="靠左 / 居中 / 靠右。"
+            hint="3D 窗口底部工具栏（模型样式、重置视图、最大化）的位置，默认居中；悬停图标查看名称。"
+            control={
+              <IconRadioFrame>
+                <IconRadioGroup
+                  label="3D 工具栏位置"
+                  value={settings.viewer3DToolbarAlign}
+                  options={ALIGN_OPTIONS}
+                  onChange={(viewer3DToolbarAlign) =>
+                    onChange({ ...settings, viewer3DToolbarAlign })
+                  }
+                />
+              </IconRadioFrame>
             }
           />
 

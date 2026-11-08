@@ -608,6 +608,7 @@ export function MoleculeEditor() {
         theme={settings.theme}
         modelStyle={settings.model3DStyle}
         onModelStyleChange={(model3DStyle) => setSettings((current) => ({ ...current, model3DStyle }))}
+        toolbarAlign={settings.viewer3DToolbarAlign}
         onClose={() => setViewer3DOpen(false)}
       />
     </div>

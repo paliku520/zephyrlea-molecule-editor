@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Box, RotateCcw, X } from 'lucide-react';
 import type { AtomStyleSpec, GLViewer } from '3dmol';
 import { computeConformer, type Conformer3D } from '../lib/conformer3d';
-import type { Model3DStyle, ThemeMode } from '../lib/settings';
-import { Model3DSwitch } from './Model3DSwitch';
+import type { Model3DStyle, ThemeMode, Viewer3DToolbarAlign } from '../lib/settings';
+import { Viewer3DToolbar } from './Viewer3DToolbar';
 
 type ThreeDmolModule = typeof import('3dmol');
 
@@ -13,6 +13,7 @@ interface Viewer3DModalProps {
   theme: ThemeMode;
   modelStyle: Model3DStyle;
   onModelStyleChange: (style: Model3DStyle) => void;
+  toolbarAlign: Viewer3DToolbarAlign;
   onClose: () => void;
 }
 
@@ -49,9 +50,25 @@ function fitView(viewer: GLViewer, style: Model3DStyle) {
   if (style === 'space-fill') viewer.zoom(0.75);
 }
 
+/** Back to the default orientation, pan and distance for the current style. */
+function resetView(viewer: GLViewer, style: Model3DStyle) {
+  const view = viewer.getView();
+  // Keep only the camera distance; the pan offsets and rotation go back to zero
+  // (an identity quaternion) before the view is re-fitted.
+  viewer.setView([0, 0, 0, view[3] ?? 0, 0, 0, 0, 1]);
+  fitView(viewer, style);
+  viewer.render();
+}
+
 const VIEWER_BACKGROUND: Record<ThemeMode, string> = {
   dark: '#171717',
   light: '#ffffff',
+};
+
+const TOOLBAR_ALIGN_CLASS: Record<Viewer3DToolbarAlign, string> = {
+  left: 'justify-start',
+  center: 'justify-center',
+  right: 'justify-end',
 };
 
 let threeDmolPromise: Promise<ThreeDmolModule> | null = null;
@@ -77,6 +94,7 @@ export function Viewer3DModal({
   theme,
   modelStyle,
   onModelStyleChange,
+  toolbarAlign,
   onClose,
 }: Viewer3DModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,6 +108,11 @@ export function Viewer3DModal({
   const [conformer, setConformer] = useState<Conformer3D | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    if (open) setMaximized(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,12 +120,23 @@ export function Viewer3DModal({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
+      // Escape leaves full-screen first so the dialog is not dismissed by accident.
+      if (maximized) {
+        setMaximized(false);
+        return;
+      }
       onClose();
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [open, onClose]);
+  }, [open, onClose, maximized]);
+
+  const handleResetView = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    resetView(viewer, modelStyleRef.current);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -203,7 +237,11 @@ export function Viewer3DModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-6">
+    <div
+      className={`fixed inset-0 z-[140] flex items-center justify-center ${
+        maximized ? 'p-2' : 'p-6'
+      }`}
+    >
       <div
         className="absolute inset-0 bg-[var(--shell-scrim)] backdrop-blur-[2px]"
         onPointerDown={onClose}
@@ -214,7 +252,9 @@ export function Viewer3DModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="viewer3d-title"
-        className="relative flex h-[min(78vh,720px)] w-full max-w-[1080px] flex-col overflow-hidden rounded-2xl border border-line-strong bg-panel shadow-[0_28px_80px_var(--shell-shadow)]"
+        className={`relative flex w-full flex-col overflow-hidden border border-line-strong bg-panel shadow-[0_28px_80px_var(--shell-shadow)] ${
+          maximized ? 'h-full max-w-none rounded-xl' : 'h-[min(78vh,720px)] max-w-[1080px] rounded-2xl'
+        }`}
       >
         <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-5 py-3.5">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -225,12 +265,13 @@ export function Viewer3DModal({
             <span className="min-w-0 truncate font-mono text-[11.5px] text-ink-faint">{smiles}</span>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-1.5">
             {conformer && (
-              <span className="hidden text-[11px] text-ink-faint sm:inline">
+              <span className="mr-1.5 hidden text-[11px] text-ink-faint sm:inline">
                 {conformer.atomCount} 个原子 · {conformer.bondCount} 根键
               </span>
             )}
+
             <button
               type="button"
               onClick={onClose}
@@ -251,19 +292,9 @@ export function Viewer3DModal({
           />
 
           {stage === 'ready' && (
-            <>
-              <p className="pointer-events-none absolute bottom-3 left-4 text-[11px] leading-relaxed text-ink-faint">
-                当前 3D 构象由本地算法生成，仅供参考
-              </p>
-
-              <div className="absolute bottom-3 right-4">
-                <Model3DSwitch
-                  value={modelStyle}
-                  onChange={onModelStyleChange}
-                  floating
-                />
-              </div>
-            </>
+            <p className="pointer-events-none absolute left-4 top-3 text-[11px] leading-relaxed text-ink-faint">
+              当前 3D 构象由本地算法生成，仅供参考
+            </p>
           )}
 
           {stage === 'loading' && (
@@ -291,6 +322,21 @@ export function Viewer3DModal({
               </div>
             </div>
           )}
+
+          <div
+            className={`pointer-events-none absolute inset-x-0 bottom-0 flex p-3 ${
+              TOOLBAR_ALIGN_CLASS[toolbarAlign]
+            }`}
+          >
+            <Viewer3DToolbar
+              modelStyle={modelStyle}
+              onModelStyleChange={onModelStyleChange}
+              onResetView={handleResetView}
+              maximized={maximized}
+              onToggleMaximized={() => setMaximized((value) => !value)}
+              ready={stage === 'ready'}
+            />
+          </div>
         </div>
       </div>
     </div>

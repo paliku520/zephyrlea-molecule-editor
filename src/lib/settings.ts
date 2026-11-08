@@ -3,6 +3,18 @@ export type ThemeMode = 'dark' | 'light';
 export type ToolbarPlacement = 'top' | 'bottom';
 /** How the 3D viewer draws the conformer. */
 export type Model3DStyle = 'ball-stick' | 'space-fill' | 'stick' | 'wireframe';
+/** Where the 3D viewer's bottom toolbar sits. */
+export type Viewer3DToolbarAlign = 'left' | 'center' | 'right';
+
+export const VIEWER_3D_TOOLBAR_OPTIONS: {
+  value: Viewer3DToolbarAlign;
+  label: string;
+  hint: string;
+}[] = [
+  { value: 'left', label: '靠左', hint: '工具栏靠左' },
+  { value: 'center', label: '居中', hint: '工具栏居中（默认）' },
+  { value: 'right', label: '靠右', hint: '工具栏靠右' },
+];
 
 export const MODEL_3D_STYLE_OPTIONS: {
   value: Model3DStyle;
@@ -21,6 +33,7 @@ export interface AppSettings {
   hideCarbonHydrogenAtoms: boolean;
   toolbarPlacement: ToolbarPlacement;
   model3DStyle: Model3DStyle;
+  viewer3DToolbarAlign: Viewer3DToolbarAlign;
 }
 
 export const SETTINGS_STORAGE_KEY = 'zephyrlea.settings';
@@ -30,6 +43,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hideCarbonHydrogenAtoms: true,
   toolbarPlacement: 'bottom',
   model3DStyle: 'ball-stick',
+  viewer3DToolbarAlign: 'center',
 };
 
 const THEME_BACKGROUND: Record<ThemeMode, string> = {
@@ -53,6 +67,11 @@ export function normalizeSettings(value: unknown): AppSettings {
     model3DStyle: MODEL_3D_STYLE_OPTIONS.some((option) => option.value === raw.model3DStyle)
       ? (raw.model3DStyle as Model3DStyle)
       : DEFAULT_SETTINGS.model3DStyle,
+    viewer3DToolbarAlign: VIEWER_3D_TOOLBAR_OPTIONS.some(
+      (option) => option.value === raw.viewer3DToolbarAlign,
+    )
+      ? (raw.viewer3DToolbarAlign as Viewer3DToolbarAlign)
+      : DEFAULT_SETTINGS.viewer3DToolbarAlign,
   };
 }
 
