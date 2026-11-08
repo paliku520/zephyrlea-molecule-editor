@@ -1,4 +1,4 @@
-import { detectChemistryProblems, type RDKitProblem } from './rdkit';
+import { inspectStructure, type MoleculeInfo, type RDKitProblem } from './rdkit';
 
 /** One molecule on the canvas, ready to be handed to RDKit. */
 export interface ValidationTarget {
@@ -25,10 +25,19 @@ export interface StructureIssue {
   blocking: boolean;
 }
 
+/** Analysis summary of one molecule on the canvas. */
+export interface MoleculeSummary {
+  /** 0-based index of the molecule inside the editor. */
+  index: number;
+  /** `null` when RDKit cannot sanitize the structure (blocking issue). */
+  info: MoleculeInfo | null;
+}
+
 export interface StructureValidation {
   /** True when no blocking issue was found. */
   ok: boolean;
   issues: StructureIssue[];
+  molecules: MoleculeSummary[];
   moleculeCount: number;
   atomCount: number;
 }
@@ -76,6 +85,7 @@ function describeProblem(problem: RDKitProblem, atomIndex: number | null): strin
 
 export async function validateStructure(targets: ValidationTarget[]): Promise<StructureValidation> {
   const issues: StructureIssue[] = [];
+  const molecules: MoleculeSummary[] = [];
   let atomCount = 0;
 
   for (let moleculeIndex = 0; moleculeIndex < targets.length; moleculeIndex += 1) {
@@ -85,8 +95,11 @@ export async function validateStructure(targets: ValidationTarget[]): Promise<St
     if (!target.smiles && !target.molfile) continue;
 
     let problems: RDKitProblem[];
+    let info: MoleculeInfo | null = null;
     try {
-      problems = await detectChemistryProblems({ smiles: target.smiles, molfile: target.molfile });
+      const inspection = await inspectStructure({ smiles: target.smiles, molfile: target.molfile });
+      problems = inspection.problems;
+      info = inspection.info;
     } catch (error) {
       problems = [
         {
@@ -96,6 +109,8 @@ export async function validateStructure(targets: ValidationTarget[]): Promise<St
         },
       ];
     }
+
+    molecules.push({ index: moleculeIndex, info });
 
     problems.forEach((problem, problemIndex) => {
       const atomIndex =
@@ -119,6 +134,7 @@ export async function validateStructure(targets: ValidationTarget[]): Promise<St
   return {
     ok: !issues.some((issue) => issue.blocking),
     issues,
+    molecules,
     moleculeCount: targets.length,
     atomCount,
   };

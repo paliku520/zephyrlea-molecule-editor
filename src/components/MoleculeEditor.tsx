@@ -6,7 +6,7 @@ import { ElementStrip } from './ElementStrip';
 import { SelectionToolbar } from './SelectionToolbar';
 import { SettingsModal } from './SettingsModal';
 import { Viewer3DModal } from './Viewer3DModal';
-import { ValidationPanel, type EngineState, type ValidationState } from './ValidationPanel';
+import { AnalysisPanel, type EngineState, type ValidationState } from './AnalysisPanel';
 import { ValidationOverlay, type ValidationMark } from './ValidationOverlay';
 import { waitForKekule } from '../lib/kekule';
 import {
@@ -489,7 +489,7 @@ export function MoleculeEditor() {
           <LeftToolRail ready={ready} activeTool={activeTool} onSelectTool={handleSelectTool} />
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {!bottomDocked && renderElementStrip('top')}
 
           <div className="flex min-h-0 flex-1">
@@ -542,7 +542,7 @@ export function MoleculeEditor() {
               )}
             </main>
 
-            <ValidationPanel
+            <AnalysisPanel
               collapsed={panelCollapsed}
               onToggle={() => setPanelCollapsed((collapsed) => !collapsed)}
               engine={engine}

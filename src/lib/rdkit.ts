@@ -16,6 +16,147 @@ export interface RDKitProblem {
   valence?: number;
 }
 
+/** Everything the analysis panel shows for one structure on the canvas. */
+export interface MoleculeInfo {
+  /** Hill formula, e.g. `C9H8O4`. */
+  formula: string;
+  /** Sum of the formal charges of all atoms. */
+  charge: number;
+  /** Average molecular weight. */
+  mass: number;
+  /** Monoisotopic mass. */
+  exactMass: number;
+  heavyAtoms: number;
+  /** Heavy atoms plus implicit hydrogens. */
+  totalAtoms: number;
+  bonds: number;
+  rings: number;
+  aromaticRings: number;
+  rotatableBonds: number;
+  hydrogenDonors: number;
+  hydrogenAcceptors: number;
+  /** Topological polar surface area in Å². */
+  polarSurfaceArea: number;
+  /** Crippen logP. */
+  logP: number;
+  /** Canonical SMILES produced by RDKit. */
+  smiles: string;
+}
+
+/** Atom defaults emitted by `Mol.get_json()`; omitted fields fall back to these. */
+interface JsonAtom {
+  z?: number;
+  impHs?: number;
+  chg?: number;
+}
+
+interface JsonMol {
+  defaults?: { atom?: JsonAtom };
+  molecules?: { atoms?: JsonAtom[] }[];
+}
+
+interface JsonDescriptors {
+  amw?: number;
+  exactmw?: number;
+  NumHeavyAtoms?: number;
+  NumAtoms?: number;
+  NumRings?: number;
+  NumAromaticRings?: number;
+  NumRotatableBonds?: number;
+  NumHBD?: number;
+  NumHBA?: number;
+  tpsa?: number;
+  CrippenClogP?: number;
+}
+
+const ELEMENT_SYMBOLS = [
+  'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar',
+  'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br',
+  'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te',
+  'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm',
+  'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn',
+  'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 'Md', 'No', 'Lr',
+  'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og',
+];
+
+function elementSymbol(atomicNumber: number): string {
+  if (atomicNumber <= 0) return '*';
+  return ELEMENT_SYMBOLS[atomicNumber - 1] ?? `X${atomicNumber}`;
+}
+
+/** Hill order: C, H, then the rest alphabetically; without carbon everything is alphabetical. */
+function toHillFormula(counts: Map<string, number>): string {
+  const symbols = [...counts.keys()];
+  const ordered = counts.has('C')
+    ? ['C', ...(counts.has('H') ? ['H'] : []), ...symbols.filter((s) => s !== 'C' && s !== 'H').sort()]
+    : symbols.sort();
+
+  return ordered
+    .map((symbol) => {
+      const count = counts.get(symbol) ?? 0;
+      return count === 1 ? symbol : `${symbol}${count}`;
+    })
+    .join('');
+}
+
+function buildFormula(atoms: JsonAtom[], defaultAtomicNumber: number): { formula: string; charge: number } {
+  const counts = new Map<string, number>();
+  let charge = 0;
+
+  for (const atom of atoms) {
+    const symbol = elementSymbol(atom.z ?? defaultAtomicNumber);
+    counts.set(symbol, (counts.get(symbol) ?? 0) + 1);
+
+    const hydrogens = atom.impHs ?? 0;
+    if (hydrogens > 0) counts.set('H', (counts.get('H') ?? 0) + hydrogens);
+
+    charge += atom.chg ?? 0;
+  }
+
+  return { formula: toHillFormula(counts), charge };
+}
+
+function descriptor(value: number | undefined, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function readMoleculeInfo(RDKit: RDKitModule, source: ProblemSource): MoleculeInfo | null {
+  let mol: Mol | null = null;
+
+  try {
+    mol = RDKit.get_mol(source.smiles) ?? (source.molfile ? RDKit.get_mol(source.molfile) : null);
+    if (!mol) return null;
+
+    const json = JSON.parse(mol.get_json()) as JsonMol;
+    const atoms = json.molecules?.[0]?.atoms ?? [];
+    const { formula, charge } = buildFormula(atoms, json.defaults?.atom?.z ?? 6);
+    const descriptors = JSON.parse(mol.get_descriptors()) as JsonDescriptors;
+
+    return {
+      formula,
+      charge,
+      mass: descriptor(descriptors.amw),
+      exactMass: descriptor(descriptors.exactmw),
+      heavyAtoms: descriptor(descriptors.NumHeavyAtoms, atoms.length),
+      totalAtoms: descriptor(descriptors.NumAtoms, atoms.length),
+      bonds: mol.get_num_bonds(),
+      rings: descriptor(descriptors.NumRings),
+      aromaticRings: descriptor(descriptors.NumAromaticRings),
+      rotatableBonds: descriptor(descriptors.NumRotatableBonds),
+      hydrogenDonors: descriptor(descriptors.NumHBD),
+      hydrogenAcceptors: descriptor(descriptors.NumHBA),
+      polarSurfaceArea: descriptor(descriptors.tpsa),
+      logP: descriptor(descriptors.CrippenClogP),
+      smiles: mol.get_smiles(),
+    };
+  } catch (error) {
+    console.warn('[RDKit] Molecule analysis failed', error);
+    return null;
+  } finally {
+    mol?.delete();
+  }
+}
+
 let modulePromise: Promise<RDKitModule> | null = null;
 
 export function loadRDKit(): Promise<RDKitModule> {
@@ -183,6 +324,24 @@ export function detectChemistryProblems(source: ProblemSource): Promise<RDKitPro
   const run = queue.then(async () => {
     const RDKit = await loadRDKit();
     return detectProblemsSync(RDKit, source);
+  });
+
+  // Keep the chain alive after a rejection so later calls still run.
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+export interface StructureInspection {
+  problems: RDKitProblem[];
+  /** Formula / mass / descriptors, or `null` when the structure cannot be sanitized. */
+  info: MoleculeInfo | null;
+}
+
+/** Chemistry problems plus the analysis summary, computed in a single queued RDKit turn. */
+export function inspectStructure(source: ProblemSource): Promise<StructureInspection> {
+  const run = queue.then(async () => {
+    const RDKit = await loadRDKit();
+    return { problems: detectProblemsSync(RDKit, source), info: readMoleculeInfo(RDKit, source) };
   });
 
   // Keep the chain alive after a rejection so later calls still run.
