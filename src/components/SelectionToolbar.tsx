@@ -7,10 +7,14 @@ const ROTATE_STEP = Math.PI / 12;
 interface SelectionToolbarProps {
   bridge: MoleculeEditorBridge | null;
   selection: SelectionSnapshot | null;
+  /** Bottom chrome (docked toolbars) the floating bar must stay above. */
+  bottomInset?: number;
 }
 
-export function SelectionToolbar({ bridge, selection }: SelectionToolbarProps) {
+export function SelectionToolbar({ bridge, selection, bottomInset = 0 }: SelectionToolbarProps) {
   const barRef = useRef<HTMLDivElement>(null);
+  const insetRef = useRef(bottomInset);
+  insetRef.current = bottomInset;
 
   useEffect(() => {
     if (!bridge || !selection) return;
@@ -24,16 +28,16 @@ export function SelectionToolbar({ bridge, selection }: SelectionToolbarProps) {
         const width = bar.offsetWidth;
         const height = bar.offsetHeight;
         const { left, top, width: boxWidth, height: boxHeight } = snapshot.box;
+        const maxTop = window.innerHeight - insetRef.current - height - 12;
 
         const maxLeft = Math.max(window.innerWidth - width - 12, 12);
         const nextLeft = Math.min(Math.max(left + boxWidth / 2 - width / 2, 12), maxLeft);
 
         const above = top - height - 12;
-        const nextTop =
-          above >= 12 ? above : Math.min(top + boxHeight + 12, window.innerHeight - height - 12);
+        const nextTop = above >= 12 ? above : Math.min(top + boxHeight + 12, maxTop);
 
         bar.style.left = `${nextLeft}px`;
-        bar.style.top = `${Math.max(nextTop, 12)}px`;
+        bar.style.top = `${Math.max(Math.min(nextTop, maxTop), 12)}px`;
         bar.style.visibility = 'visible';
       }
 

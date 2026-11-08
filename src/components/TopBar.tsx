@@ -6,6 +6,8 @@ import { MAX_ZOOM, MIN_ZOOM } from '../lib/editorBoard';
 interface TopBarProps {
   ready: boolean;
   zoom: number;
+  /** `bottom` docks the bar along the bottom edge (border on top). */
+  placement?: 'top' | 'bottom';
   smiles: string;
   onSmilesChange: (value: string) => void;
   onSubmitSmiles: () => void;
@@ -26,6 +28,7 @@ interface TopBarProps {
 export function TopBar({
   ready,
   zoom,
+  placement = 'top',
   smiles,
   onSmilesChange,
   onSubmitSmiles,
@@ -45,9 +48,12 @@ export function TopBar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const atMinZoom = zoom <= MIN_ZOOM + 1e-3;
   const atMaxZoom = zoom >= MAX_ZOOM - 1e-3;
+  const borderClass = placement === 'bottom' ? 'border-t' : 'border-b';
 
   return (
-    <header className="flex h-[56px] shrink-0 items-center gap-1 border-b border-line bg-panel px-3">
+    <header
+      className={`flex h-[56px] shrink-0 items-center gap-1 ${borderClass} border-line bg-panel px-3`}
+    >
       <div className="flex items-center gap-0.5">
         <IconButton label="撤销 (Ctrl+Z)" onClick={onUndo} disabled={!ready}>
           <Undo2 size={17} strokeWidth={1.7} />

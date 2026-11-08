@@ -1,9 +1,12 @@
 export type ThemeMode = 'dark' | 'light';
+/** Where the control chrome is docked; bottom is friendlier on tall screens. */
+export type ToolbarPlacement = 'top' | 'bottom';
 
 export interface AppSettings {
   theme: ThemeMode;
   /** Skeletal style: carbons unlabelled and only required hydrogens shown. */
   hideCarbonHydrogenAtoms: boolean;
+  toolbarPlacement: ToolbarPlacement;
 }
 
 export const SETTINGS_STORAGE_KEY = 'zephyrlea.settings';
@@ -11,6 +14,7 @@ export const SETTINGS_STORAGE_KEY = 'zephyrlea.settings';
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   hideCarbonHydrogenAtoms: true,
+  toolbarPlacement: 'bottom',
 };
 
 const THEME_BACKGROUND: Record<ThemeMode, string> = {
@@ -27,6 +31,10 @@ export function normalizeSettings(value: unknown): AppSettings {
       typeof raw.hideCarbonHydrogenAtoms === 'boolean'
         ? raw.hideCarbonHydrogenAtoms
         : DEFAULT_SETTINGS.hideCarbonHydrogenAtoms,
+    toolbarPlacement:
+      raw.toolbarPlacement === 'top' || raw.toolbarPlacement === 'bottom'
+        ? raw.toolbarPlacement
+        : DEFAULT_SETTINGS.toolbarPlacement,
   };
 }
 

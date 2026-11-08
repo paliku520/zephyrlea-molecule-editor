@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
-import { Moon, Sun, X } from 'lucide-react';
-import type { AppSettings, ThemeMode } from '../lib/settings';
+import { Moon, PanelBottom, PanelTop, Sun, X } from 'lucide-react';
+import type { AppSettings, ThemeMode, ToolbarPlacement } from '../lib/settings';
 
 interface SettingsModalProps {
   open: boolean;
@@ -12,6 +12,11 @@ interface SettingsModalProps {
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: '深色', icon: Moon },
   { value: 'light', label: '浅色', icon: Sun },
+];
+
+const PLACEMENT_OPTIONS: { value: ToolbarPlacement; label: string; icon: typeof Sun }[] = [
+  { value: 'top', label: '顶部', icon: PanelTop },
+  { value: 'bottom', label: '底部', icon: PanelBottom },
 ];
 
 export function SettingsModal({ open, settings, onChange, onClose }: SettingsModalProps) {
@@ -64,33 +69,27 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
             title="外观主题"
             description="深色适合长时间绘图，浅色更适合截图与打印预览。"
             control={
-              <div
-                role="radiogroup"
-                aria-label="外观主题"
-                className="flex shrink-0 items-center gap-1 rounded-lg border border-line bg-canvas p-1"
-              >
-                {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
-                  const active = settings.theme === value;
+              <SegmentedControl
+                label="外观主题"
+                value={settings.theme}
+                options={THEME_OPTIONS}
+                onChange={(theme) => onChange({ ...settings, theme })}
+              />
+            }
+          />
 
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => onChange({ ...settings, theme: value })}
-                      className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-colors ${
-                        active
-                          ? 'bg-pill text-pill-ink shadow-[0_1px_2px_var(--shell-shadow)]'
-                          : 'text-ink-muted hover:bg-hover hover:text-ink'
-                      }`}
-                    >
-                      <Icon size={13} strokeWidth={1.9} />
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
+          <div className="mx-3 h-px bg-line" />
+
+          <SettingRow
+            title="工具栏位置"
+            description="大屏幕上可把操作栏与绘图工具栏一起放到窗口底部，鼠标移动距离更短。"
+            control={
+              <SegmentedControl
+                label="工具栏位置"
+                value={settings.toolbarPlacement}
+                options={PLACEMENT_OPTIONS}
+                onChange={(toolbarPlacement) => onChange({ ...settings, toolbarPlacement })}
+              />
             }
           />
 
@@ -151,6 +150,50 @@ function SettingRow({ title, description, control }: SettingRowProps) {
         <p className="mt-1 text-[11.5px] leading-relaxed text-ink-muted">{description}</p>
       </div>
       {control}
+    </div>
+  );
+}
+
+interface SegmentedControlProps<T extends string> {
+  label: string;
+  value: T;
+  options: { value: T; label: string; icon: typeof Sun }[];
+  onChange: (value: T) => void;
+}
+
+function SegmentedControl<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: SegmentedControlProps<T>) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="flex shrink-0 items-center gap-1 rounded-lg border border-line bg-canvas p-1"
+    >
+      {options.map(({ value: optionValue, label: optionLabel, icon: Icon }) => {
+        const active = value === optionValue;
+
+        return (
+          <button
+            key={optionValue}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(optionValue)}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium transition-colors ${
+              active
+                ? 'bg-pill text-pill-ink shadow-[0_1px_2px_var(--shell-shadow)]'
+                : 'text-ink-muted hover:bg-hover hover:text-ink'
+            }`}
+          >
+            <Icon size={13} strokeWidth={1.9} />
+            {optionLabel}
+          </button>
+        );
+      })}
     </div>
   );
 }

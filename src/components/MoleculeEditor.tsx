@@ -20,6 +20,9 @@ interface ToastState {
   detail?: string;
 }
 
+/** Height of the docked bottom chrome: element strip (52) + tool rail (53) + action bar (56). */
+const BOTTOM_CHROME_PX = 161;
+
 function ToastIcon({ kind }: { kind: ToastState['kind'] }) {
   if (kind === 'success') {
     return <Check size={16} strokeWidth={2.2} className="mt-0.5 shrink-0 text-accent" />;
@@ -299,43 +302,63 @@ export function MoleculeEditor() {
     setSettings(next);
   }, []);
 
+  const bottomDocked = settings.toolbarPlacement === 'bottom';
+
+  const renderElementStrip = (placement: 'top' | 'bottom') => (
+    <ElementStrip
+      ready={ready}
+      theme={settings.theme}
+      activeTool={activeTool}
+      onSelectElement={handleSelectElement}
+      placement={placement}
+    />
+  );
+
+  const renderTopBar = (placement: 'top' | 'bottom') => (
+    <TopBar
+      ready={ready}
+      zoom={zoom}
+      placement={placement}
+      smiles={smilesInput}
+      onSmilesChange={setSmilesInput}
+      onSubmitSmiles={() => void handleLoadSmiles()}
+      onOpenFile={(file) => void handleOpenFile(file)}
+      onUndo={() => bridgeRef.current?.undo()}
+      onRedo={() => bridgeRef.current?.redo()}
+      onCleanUp={() => void handleCleanUp()}
+      onZoomIn={() => bridgeRef.current?.zoomIn()}
+      onZoomOut={() => bridgeRef.current?.zoomOut()}
+      onResetZoom={() => bridgeRef.current?.resetZoom()}
+      onClear={handleClear}
+      onExport={handleExport}
+      onView3D={handleView3D}
+      onShortcuts={handleShortcuts}
+      onSettings={() => setSettingsOpen(true)}
+    />
+  );
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-canvas text-ink antialiased">
-      <TopBar
-        ready={ready}
-        zoom={zoom}
-        smiles={smilesInput}
-        onSmilesChange={setSmilesInput}
-        onSubmitSmiles={() => void handleLoadSmiles()}
-        onOpenFile={(file) => void handleOpenFile(file)}
-        onUndo={() => bridgeRef.current?.undo()}
-        onRedo={() => bridgeRef.current?.redo()}
-        onCleanUp={() => void handleCleanUp()}
-        onZoomIn={() => bridgeRef.current?.zoomIn()}
-        onZoomOut={() => bridgeRef.current?.zoomOut()}
-        onResetZoom={() => bridgeRef.current?.resetZoom()}
-        onClear={handleClear}
-        onExport={handleExport}
-        onView3D={handleView3D}
-        onShortcuts={handleShortcuts}
-        onSettings={() => setSettingsOpen(true)}
-      />
+      {!bottomDocked && renderTopBar('top')}
 
-      <div className="flex min-h-0 flex-1">
-        <LeftToolRail ready={ready} activeTool={activeTool} onSelectTool={handleSelectTool} />
+      <div className={bottomDocked ? 'flex min-h-0 flex-1 flex-col' : 'flex min-h-0 flex-1'}>
+        {!bottomDocked && (
+          <LeftToolRail ready={ready} activeTool={activeTool} onSelectTool={handleSelectTool} />
+        )}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <ElementStrip
-            ready={ready}
-            theme={settings.theme}
-            activeTool={activeTool}
-            onSelectElement={handleSelectElement}
-          />
+          {!bottomDocked && renderElementStrip('top')}
 
           <main className="dot-grid relative min-h-0 flex-1 overflow-hidden">
             <div ref={hostRef} className="kekule-host absolute inset-0" />
 
-            {ready && <SelectionToolbar bridge={bridgeRef.current} selection={selection} />}
+            {ready && (
+              <SelectionToolbar
+                bridge={bridgeRef.current}
+                selection={selection}
+                bottomInset={bottomDocked ? BOTTOM_CHROME_PX : 0}
+              />
+            )}
 
             {!ready && !initError && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -375,8 +398,22 @@ export function MoleculeEditor() {
         </div>
       </div>
 
+      {bottomDocked && renderElementStrip('bottom')}
+      {bottomDocked && (
+        <LeftToolRail
+          ready={ready}
+          activeTool={activeTool}
+          onSelectTool={handleSelectTool}
+          orientation="horizontal"
+        />
+      )}
+      {bottomDocked && renderTopBar('bottom')}
+
       {toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-7 z-[100] flex justify-center px-4">
+        <div
+          className="pointer-events-none fixed inset-x-0 z-[100] flex justify-center px-4"
+          style={{ bottom: bottomDocked ? BOTTOM_CHROME_PX + 20 : 28 }}
+        >
           <div className="pointer-events-auto flex max-w-[640px] items-start gap-3 rounded-xl border border-line-strong bg-raised/95 px-4 py-3 shadow-[0_20px_60px_var(--shell-shadow)] backdrop-blur-md">
             <ToastIcon kind={toast.kind} />
             <div className="min-w-0 flex-1">

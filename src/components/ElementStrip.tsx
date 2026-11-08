@@ -9,6 +9,8 @@ interface ElementStripProps {
   theme: ThemeMode;
   activeTool: ToolId | null;
   onSelectElement: (symbol: string) => void;
+  /** `bottom` docks the strip along the bottom edge; its menu opens upwards. */
+  placement?: 'top' | 'bottom';
 }
 
 const PRIMARY_ELEMENT_SYMBOLS = ['C', 'H', 'N', 'O', 'S', 'P', 'F', 'Cl', 'Br', 'I'];
@@ -41,9 +43,16 @@ const MORE_ELEMENTS = [
   'Te',
 ];
 
-export function ElementStrip({ ready, theme, activeTool, onSelectElement }: ElementStripProps) {
+export function ElementStrip({
+  ready,
+  theme,
+  activeTool,
+  onSelectElement,
+  placement = 'top',
+}: ElementStripProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreWrapperRef = useRef<HTMLDivElement>(null);
+  const docked = placement === 'bottom';
 
   const elementColors = getElementColors(theme);
   const defaultColor = getDefaultElementColor(theme);
@@ -66,7 +75,11 @@ export function ElementStrip({ ready, theme, activeTool, onSelectElement }: Elem
   }, [moreOpen]);
 
   return (
-    <div className="relative z-20 flex h-[52px] shrink-0 items-center gap-1 border-b border-line bg-panel px-6">
+    <div
+      className={`relative z-20 flex h-[52px] shrink-0 items-center gap-1 ${
+        docked ? 'border-t' : 'border-b'
+      } border-line bg-panel px-6`}
+    >
       {primaryElements.map(({ symbol, color }) => {
         const isActive = activeTool === `element:${symbol}`;
 
@@ -102,7 +115,11 @@ export function ElementStrip({ ready, theme, activeTool, onSelectElement }: Elem
         </button>
 
         {moreOpen && (
-          <div className="absolute left-0 top-[calc(100%+8px)] z-50 w-[276px] rounded-lg border border-line-strong bg-popover p-2 shadow-[0_18px_50px_var(--shell-shadow)]">
+          <div
+            className={`absolute left-0 z-50 w-[276px] rounded-lg border border-line-strong bg-popover p-2 shadow-[0_18px_50px_var(--shell-shadow)] ${
+              docked ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]'
+            }`}
+          >
             <div className="grid grid-cols-5 gap-1">
               {MORE_ELEMENTS.map((symbol) => {
                 const isActive = activeTool === `element:${symbol}`;

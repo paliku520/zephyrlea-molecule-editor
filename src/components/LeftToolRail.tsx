@@ -25,6 +25,8 @@ interface LeftToolRailProps {
   ready: boolean;
   activeTool: ToolId | null;
   onSelectTool: (tool: ToolId) => void;
+  /** `horizontal` docks the rail as a strip along the bottom edge. */
+  orientation?: 'vertical' | 'horizontal';
 }
 
 interface ToolDefinition {
@@ -78,7 +80,64 @@ const TOOL_GROUPS: ToolDefinition[][] = [
   ],
 ];
 
-export function LeftToolRail({ ready, activeTool, onSelectTool }: LeftToolRailProps) {
+export function LeftToolRail({
+  ready,
+  activeTool,
+  onSelectTool,
+  orientation = 'vertical',
+}: LeftToolRailProps) {
+  const rButton = (
+    <button
+      type="button"
+      aria-label="R 基团"
+      aria-pressed={activeTool === 'element:R' || undefined}
+      title="R 基团"
+      onClick={() => onSelectTool('element:R')}
+      disabled={!ready}
+      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-35 ${
+        activeTool === 'element:R'
+          ? 'bg-pill text-pill-ink'
+          : 'text-accent hover:bg-hover hover:text-accent-strong'
+      }`}
+    >
+      <span className="text-[15px] font-semibold tracking-tight">R</span>
+    </button>
+  );
+
+  if (orientation === 'horizontal') {
+    return (
+      <div
+        className="flex w-full shrink-0 flex-wrap items-center border-t border-line bg-panel px-3 py-2"
+        role="toolbar"
+        aria-label="绘图工具"
+      >
+        {TOOL_GROUPS.map((group, groupIndex) => (
+          <Fragment key={group.map((item) => item.tool).join('-')}>
+            {(groupIndex === 2 || groupIndex === 7) && (
+              <span className="mx-1.5 h-6 w-px shrink-0 bg-line" />
+            )}
+            <div className="flex shrink-0 items-center gap-0.5">
+              {group.map(({ tool, label, icon }) => (
+                <IconButton
+                  key={tool}
+                  label={label}
+                  active={activeTool === tool}
+                  onClick={() => onSelectTool(tool)}
+                  disabled={!ready}
+                >
+                  {icon}
+                </IconButton>
+              ))}
+            </div>
+          </Fragment>
+        ))}
+
+        <span className="mx-1.5 h-6 w-px shrink-0 bg-line" />
+        {rButton}
+      </div>
+    );
+  }
+
   return (
     <aside className="flex w-[90px] shrink-0 flex-col items-center overflow-y-auto border-r border-line bg-panel px-2 py-4">
       <div className="flex w-full flex-col">
@@ -109,23 +168,7 @@ export function LeftToolRail({ ready, activeTool, onSelectTool }: LeftToolRailPr
 
       <div className="mt-auto w-full pt-5">
         <div className="mb-3 h-px w-full bg-line" />
-        <div className="flex justify-center">
-          <button
-            type="button"
-            aria-label="R 基团"
-            aria-pressed={activeTool === 'element:R' || undefined}
-            title="R 基团"
-            onClick={() => onSelectTool('element:R')}
-            disabled={!ready}
-            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-35 ${
-              activeTool === 'element:R'
-                ? 'bg-pill text-pill-ink'
-                : 'text-accent hover:bg-hover hover:text-accent-strong'
-            }`}
-          >
-            <span className="text-[15px] font-semibold tracking-tight">R</span>
-          </button>
-        </div>
+        <div className="flex justify-center">{rButton}</div>
       </div>
     </aside>
   );
