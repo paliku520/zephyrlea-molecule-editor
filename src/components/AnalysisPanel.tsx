@@ -428,7 +428,7 @@ export function AnalysisPanel({
                         {blocking.length} 个价键错误
                       </p>
                       <p className="mt-1 text-[11.5px] leading-relaxed text-ink-soft">
-                        已禁用「整理」与「在 3D 中查看」，请修正标红的原子后重试。
+                        已禁用「整理结构」与「在 3D 中查看」，请修正标红的原子后重试。
                       </p>
                     </div>
                   )}

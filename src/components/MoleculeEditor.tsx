@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Info, Search, X } from 'lucide-react';
+import { AlertTriangle, Check, Info, LoaderCircle, Search, X } from 'lucide-react';
 import { TopBar } from './TopBar';
 import { LeftToolRail } from './LeftToolRail';
 import { ElementStrip } from './ElementStrip';
@@ -24,7 +24,8 @@ import {
 } from '../lib/structureValidation';
 
 interface ToastState {
-  kind: 'success' | 'error' | 'info';
+  /** `pending` is a blocking-progress note: it stays until it is replaced. */
+  kind: 'success' | 'error' | 'info' | 'pending';
   title: string;
   detail?: string;
 }
@@ -41,7 +42,23 @@ function ToastIcon({ kind }: { kind: ToastState['kind'] }) {
     return <AlertTriangle size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-danger" />;
   }
 
+  if (kind === 'pending') {
+    return <LoaderCircle size={16} strokeWidth={2} className="mt-0.5 shrink-0 animate-spin text-accent" />;
+  }
+
   return <Info size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-ink-muted" />;
+}
+
+/**
+ * Resolve after the browser painted the current state. Clean Up blocks the main
+ * thread, so the progress toast has to reach the screen before it starts.
+ */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(resolve, 0);
+    });
+  });
 }
 
 /** Maps RDKit atom indexes back to the Kekule atoms drawn on the canvas. */
@@ -67,6 +84,7 @@ export function MoleculeEditor() {
   const hostRef = useRef<HTMLDivElement>(null);
   const bridgeRef = useRef<MoleculeEditorBridge | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const relayoutBusyRef = useRef(false);
 
   const [initAttempt, setInitAttempt] = useState(0);
   const [ready, setReady] = useState(false);
@@ -90,10 +108,12 @@ export function MoleculeEditor() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [validationMarks, setValidationMarks] = useState<ValidationMark[]>([]);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [busyTask, setBusyTask] = useState<'cleanUp' | 'relayout' | null>(null);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
+  /** Any duration of 0 or less keeps the toast until it is replaced. */
   const showToast = useCallback((next: ToastState | null, duration = 5200) => {
     if (toastTimerRef.current !== null) {
       window.clearTimeout(toastTimerRef.current);
@@ -102,7 +122,7 @@ export function MoleculeEditor() {
 
     setToast(next);
 
-    if (next) {
+    if (next && duration > 0) {
       toastTimerRef.current = window.setTimeout(() => {
         setToast(null);
         toastTimerRef.current = null;
@@ -369,16 +389,56 @@ export function MoleculeEditor() {
   );
 
   const handleCleanUp = useCallback(async () => {
+    if (relayoutBusyRef.current) return;
+    relayoutBusyRef.current = true;
+    setBusyTask('cleanUp');
+    showToast({ kind: 'pending', title: '正在整理视图…' }, 0);
+
+    // Clean Up is synchronous, so give the progress toast a frame to paint.
+    await nextPaint();
+
+    try {
+      const zoomed = bridgeRef.current?.cleanUp() ?? 0;
+      if (zoomed > 0) {
+        showToast({ kind: 'success', title: '视图已整理', detail: '结构已排布并缩放到约占画布 75%。' });
+      } else {
+        showToast({ kind: 'info', title: '画布上还没有结构' });
+      }
+    } catch (error) {
+      console.error('[Clean Up] Failed', error);
+      showToast({ kind: 'error', title: '整理视图失败', detail: String(error) });
+    } finally {
+      relayoutBusyRef.current = false;
+      setBusyTask(null);
+    }
+  }, [showToast]);
+
+  const handleRelayout = useCallback(async () => {
     if (structureBlocked) {
       showToast({ kind: 'error', title: '存在价键错误，无法整理结构', detail: '请先修正红圈标记的原子。' });
       return;
     }
 
-    const cleaned = (await bridgeRef.current?.cleanUp()) ?? 0;
-    if (cleaned > 0) {
-      showToast({ kind: 'success', title: '结构已整理' });
-    } else {
-      showToast({ kind: 'info', title: '画布上还没有结构' });
+    if (relayoutBusyRef.current) return;
+    relayoutBusyRef.current = true;
+    setBusyTask('relayout');
+    showToast({ kind: 'pending', title: '正在整理结构…' }, 0);
+
+    await nextPaint();
+
+    try {
+      const relaidOut = (await bridgeRef.current?.relayout()) ?? 0;
+      if (relaidOut > 0) {
+        showToast({ kind: 'success', title: '结构已整理', detail: '已重新生成 2D 坐标并规范键长键角。' });
+      } else {
+        showToast({ kind: 'info', title: '画布上还没有结构' });
+      }
+    } catch (error) {
+      console.error('[Relayout] Failed', error);
+      showToast({ kind: 'error', title: '整理结构失败', detail: String(error) });
+    } finally {
+      relayoutBusyRef.current = false;
+      setBusyTask(null);
     }
   }, [showToast, structureBlocked]);
 
@@ -462,13 +522,15 @@ export function MoleculeEditor() {
       zoom={zoom}
       placement={placement}
       blocked={structureBlocked}
+      busy={busyTask !== null}
       smiles={smilesInput}
       onSmilesChange={setSmilesInput}
       onSubmitSmiles={() => void handleLoadSmiles()}
       onOpenFile={(file) => void handleOpenFile(file)}
       onUndo={() => bridgeRef.current?.undo()}
       onRedo={() => bridgeRef.current?.redo()}
-      onCleanUp={() => void handleCleanUp()}
+      onCleanUp={handleCleanUp}
+      onRelayout={() => void handleRelayout()}
       onZoomIn={() => bridgeRef.current?.zoomIn()}
       onZoomOut={() => bridgeRef.current?.zoomOut()}
       onResetZoom={() => bridgeRef.current?.resetZoom()}
@@ -481,7 +543,11 @@ export function MoleculeEditor() {
   );
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-canvas text-ink antialiased">
+    <div
+      className={`flex h-screen w-screen flex-col overflow-hidden bg-canvas text-ink antialiased ${
+        busyTask ? 'cursor-progress' : ''
+      }`}
+    >
       {!bottomDocked && renderTopBar('top')}
 
       <div className={bottomDocked ? 'flex min-h-0 flex-1 flex-col' : 'flex min-h-0 flex-1'}>
@@ -573,7 +639,11 @@ export function MoleculeEditor() {
           className="pointer-events-none fixed inset-x-0 z-[100] flex justify-center px-4"
           style={{ bottom: bottomDocked ? BOTTOM_CHROME_PX + 20 : 28 }}
         >
-          <div className="pointer-events-auto flex max-w-[640px] items-start gap-3 rounded-xl border border-line-strong bg-raised/95 px-4 py-3 shadow-[0_20px_60px_var(--shell-shadow)] backdrop-blur-md">
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-auto flex max-w-[640px] items-start gap-3 rounded-xl border border-line-strong bg-raised/95 px-4 py-3 shadow-[0_20px_60px_var(--shell-shadow)] backdrop-blur-md"
+          >
             <ToastIcon kind={toast.kind} />
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-medium leading-5 text-ink">{toast.title}</p>
@@ -583,14 +653,16 @@ export function MoleculeEditor() {
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => showToast(null)}
-              aria-label="关闭提示"
-              className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-hover-strong hover:text-ink"
-            >
-              <X size={14} strokeWidth={2} />
-            </button>
+            {toast.kind !== 'pending' && (
+              <button
+                type="button"
+                onClick={() => showToast(null)}
+                aria-label="关闭提示"
+                className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-hover-strong hover:text-ink"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            )}
           </div>
         </div>
       )}

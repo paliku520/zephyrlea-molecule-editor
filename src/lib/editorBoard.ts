@@ -36,8 +36,10 @@ const ANCHOR_RESTORE_DELAYS_MS = [140, 400, 800];
  * a speck or blow single bonds up past a screen; the editor clamps here, which
  * also covers Kekule's own double-click / wheel / gesture zoom paths.
  */
-export const MIN_ZOOM = 0.4;
-export const MAX_ZOOM = 4;
+/** Low enough for Clean Up to fit a very large drawing into the viewport. */
+export const MIN_ZOOM = 0.2;
+/** High enough for Clean Up to fill the viewport with small molecules. */
+export const MAX_ZOOM = 8;
 /** Zoom differences below this are treated as "no change". */
 const ZOOM_EPSILON = 1e-4;
 

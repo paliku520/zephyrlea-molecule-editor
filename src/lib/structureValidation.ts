@@ -73,7 +73,7 @@ function describeProblem(problem: RDKitProblem, atomIndex: number | null): strin
   if (problem.type === 'AtomValenceException') {
     const name = problem.atomSymbol ? ELEMENT_NAMES[problem.atomSymbol] ?? problem.atomSymbol : '该';
     const position = atomIndex === null ? '' : `第 ${atomIndex + 1} 个`;
-    return `${position}${name}原子的显式化合价为 ${problem.valence}，超过了该元素允许的最大值；无法整理或生成 3D 结构。`;
+    return `${position}${name}原子的显式化合价为 ${problem.valence}，超过了该元素允许的最大值；无法整理结构或生成 3D 视图。`;
   }
 
   if (problem.type === 'ParseException') {

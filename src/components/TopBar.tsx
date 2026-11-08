@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Box, Download, FileUp, Keyboard, Redo2, Scan, Settings, Trash2, Undo2, Wand2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Box, Download, FileUp, Keyboard, LayoutGrid, Redo2, Scan, Settings, Trash2, Undo2, Wand2, ZoomIn, ZoomOut } from 'lucide-react';
 import { IconButton } from './ui/IconButton';
 import { MAX_ZOOM, MIN_ZOOM } from '../lib/editorBoard';
 
@@ -8,6 +8,8 @@ interface TopBarProps {
   zoom: number;
   /** True when RDKit reports a blocking chemistry problem (e.g. valence error). */
   blocked?: boolean;
+  /** True while Clean Up / Relayout is running, so both cannot be queued twice. */
+  busy?: boolean;
   /** `bottom` docks the bar along the bottom edge (border on top). */
   placement?: 'top' | 'bottom';
   smiles: string;
@@ -17,6 +19,7 @@ interface TopBarProps {
   onUndo: () => void;
   onRedo: () => void;
   onCleanUp: () => void;
+  onRelayout: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
@@ -31,6 +34,7 @@ export function TopBar({
   ready,
   zoom,
   blocked = false,
+  busy = false,
   placement = 'top',
   smiles,
   onSmilesChange,
@@ -39,6 +43,7 @@ export function TopBar({
   onUndo,
   onRedo,
   onCleanUp,
+  onRelayout,
   onZoomIn,
   onZoomOut,
   onResetZoom,
@@ -119,12 +124,27 @@ export function TopBar({
         <button
           type="button"
           onClick={onCleanUp}
-          disabled={!ready || blocked}
-          title={blocked ? '存在价键错误，无法整理' : '整理结构 (Clean Up)'}
+          disabled={!ready || busy}
+          title="整理视图：把零散结构排成整齐的行，并缩放到约占画布 75%（不改动结构本身）"
           className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
         >
           <Wand2 size={16} strokeWidth={1.7} />
-          <span className="hidden xl:inline">整理</span>
+          <span className="hidden xl:inline">整理视图</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onRelayout}
+          disabled={!ready || blocked || busy}
+          title={
+            blocked
+              ? '存在价键错误，无法整理结构'
+              : '整理结构：重新生成 2D 坐标，规范键长与键角（不改变排布与缩放）'
+          }
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+        >
+          <LayoutGrid size={16} strokeWidth={1.7} />
+          <span className="hidden xl:inline">整理结构</span>
         </button>
 
         <IconButton label="放大" onClick={onZoomIn} disabled={!ready || atMaxZoom}>

@@ -1,5 +1,5 @@
 import type { EditorBoard } from './editorBoard';
-import { createEditorBoard, MIN_ZOOM } from './editorBoard';
+import { createEditorBoard, MAX_ZOOM, MIN_ZOOM } from './editorBoard';
 import {
   installBoardPersistence,
   type BoardPersistence,
@@ -75,7 +75,10 @@ export interface MoleculeEditorBridge {
   /** Circle around one atom, in viewport pixels. */
   getAtomScreenRing(atom: any): AtomScreenRing | null;
   importSmiles(smiles: string): Promise<boolean>;
-  cleanUp(): Promise<number>;
+  /** Pack the structures into tidy rows and fit the view. Keeps every coordinate. */
+  cleanUp(): number;
+  /** Normalise the structures: regenerate their 2D coordinates, nothing else. */
+  relayout(): Promise<number>;
   clear(): void;
   undo(): void;
   redo(): void;
@@ -125,7 +128,23 @@ interface FitToViewOptions {
   onlyWhenClipped?: boolean;
   /** Lower zoom bound, so even widely scattered fragments can be gathered. */
   minZoom?: number;
+  /** Upper zoom bound; defaults to 2.6 (or the current zoom when zooming in is off). */
+  maxZoom?: number;
+  /**
+   * Fraction of the viewport the drawing should fill. When set, the fit zooms
+   * both in and out so every drawing ends up at the same relative size.
+   */
+  coverage?: number;
 }
+
+/**
+ * Share of the viewport the drawing fills after Clean Up, on its limiting axis.
+ * Slightly below the 75% target because the geometric box ignores the pixels the
+ * atom labels add around it, so the rendered drawing ends up a bit larger.
+ */
+const VIEW_FIT_COVERAGE = 0.72;
+/** Pixels kept free around the drawing by the plain "reset zoom" fit. */
+const VIEW_FIT_PADDING = 120;
 
 /** True when any part of the drawing sits outside the visible viewport. */
 function isContentClipped(K: KekuleNamespace, composer: any, editor: any) {
@@ -170,17 +189,25 @@ function fitToView(
 
   if (options.onlyWhenClipped && !isContentClipped(K, composer, editor)) return false;
 
-  const padding = 120;
-  const factor = Math.min(
-    (visible.width - padding) / contentWidth,
-    (visible.height - padding) / contentHeight,
-  );
+  const coverage = options.coverage;
+  const factor =
+    coverage === undefined
+      ? Math.min(
+          (visible.width - VIEW_FIT_PADDING) / contentWidth,
+          (visible.height - VIEW_FIT_PADDING) / contentHeight,
+        )
+      : Math.min(
+          (visible.width * coverage) / contentWidth,
+          (visible.height * coverage) / contentHeight,
+        );
   const currentZoom = editor.getCurrZoom?.() ?? 1;
-  const maxZoom = options.allowZoomIn === false ? currentZoom : 2.6;
+  const maxZoom = options.maxZoom ?? (options.allowZoomIn === false ? currentZoom : 2.6);
   const minZoom = options.minZoom ?? 0.45;
   const targetZoom = Math.max(minZoom, Math.min(currentZoom * factor, maxZoom));
 
-  editor.zoomTo?.(targetZoom);
+  if (Math.abs(targetZoom - currentZoom) > 1e-3) {
+    editor.zoomTo?.(targetZoom);
+  }
   // The fit is about to place the drawing by hand, so drop the restores that
   // the zoom queued for the previous view.
   board.clearPendingRestores();
@@ -209,6 +236,8 @@ const ARRANGE_MARGIN_PX = 28;
 const ARRANGE_UNIT_PADDING = 0.5;
 
 interface ArrangeUnit {
+  /** Fragment that owns the atoms, so it can be moved in one call when possible. */
+  molecule: any;
   nodes: any[];
   box: { x1: number; y1: number; x2: number; y2: number };
 }
@@ -274,6 +303,7 @@ function collectArrangeUnits(K: KekuleNamespace, molecules: any[]): ArrangeUnit[
       if (!Number.isFinite(x1)) continue;
 
       units.push({
+        molecule,
         nodes: component,
         box: {
           x1: x1 - ARRANGE_UNIT_PADDING,
@@ -290,16 +320,11 @@ function collectArrangeUnits(K: KekuleNamespace, molecules: any[]): ArrangeUnit[
 
 /**
  * Clean Up rearranges the drawing itself: every structure is moved into an
- * evenly spaced block centred on the current viewport, keeping the zoom level
- * when it fits. Structures are placed in reading order (top row first, then
- * left to right) so the result follows the original layout.
+ * evenly spaced block centred on the current viewport. Structures are placed in
+ * reading order (top row first, then left to right) so the result follows the
+ * original layout. The view is fitted by the caller.
  */
-function arrangeFragments(
-  K: KekuleNamespace,
-  composer: any,
-  editor: any,
-  board: EditorBoard,
-) {
+function arrangeFragments(K: KekuleNamespace, composer: any, editor: any) {
   const molecules = getMolecules(K, composer).filter(
     (molecule) => (molecule.getNodeCount?.() ?? 0) > 0,
   );
@@ -404,44 +429,62 @@ function arrangeFragments(
     };
   };
 
-  let result = layout();
+  const result = layout();
   if (!result) return false;
 
-  // Only shrink when the packed block cannot fit the viewport at this zoom.
-  if (result.totalWidth > result.availableWidth || result.totalHeight > result.availableHeight) {
-    const factor = Math.min(
-      result.availableWidth / result.totalWidth,
-      result.availableHeight / result.totalHeight,
-    );
-
-    if (factor < 0.98) {
-      const currentZoom = editor.getCurrZoom?.() ?? 1;
-      editor.zoomTo?.(Math.max(MIN_ZOOM, currentZoom * factor));
-      board.clearPendingRestores();
-      result = layout() ?? result;
-    }
-  }
-
+  // The caller always fits the view right afterwards, so the block only has to
+  // be laid out here - no extra zoom pass (each one re-renders the whole
+  // drawing) is needed to make it fit.
   const blockCenter = { x: result.totalWidth / 2, y: result.totalHeight / 2 };
   const space = editor.getChemSpace?.();
+  const allowCoordBorrow = editor.getAllowCoordBorrow?.() ?? true;
 
+  // Offsets per unit, grouped by the fragment that owns the atoms.
+  const offsets = new Map<any, { unit: ArrangeUnit; dx: number; dy: number }[]>();
+  for (const item of result.placed) {
+    const targetX = viewCenter.x + (item.x + item.width / 2 - blockCenter.x) / result.scale;
+    const targetY = viewCenter.y - (item.y + item.height / 2 - blockCenter.y) / result.scale;
+    const own = offsets.get(item.unit.molecule) ?? [];
+    own.push({ unit: item.unit, dx: targetX - item.centerX, dy: targetY - item.centerY });
+    offsets.set(item.unit.molecule, own);
+  }
+
+  editor.beginUpdateObject?.();
   space?.beginUpdate?.();
   try {
-    for (const item of result.placed) {
-      const targetX = viewCenter.x + (item.x + item.width / 2 - blockCenter.x) / result.scale;
-      const targetY = viewCenter.y - (item.y + item.height / 2 - blockCenter.y) / result.scale;
-      const deltaX = targetX - item.centerX;
-      const deltaY = targetY - item.centerY;
+    for (const [molecule, entries] of offsets) {
+      const first = entries[0];
+      const wholeFragment =
+        entries.length === 1 ||
+        entries.every(
+          (entry) =>
+            Math.abs(entry.dx - first.dx) < 1e-6 && Math.abs(entry.dy - first.dy) < 1e-6,
+        );
 
-      for (const node of item.unit.nodes) {
-        const coord = node.getCoord2D?.(true);
-        if (!coord) continue;
+      // Moving the fragment's own coordinate is what Kekule's panning does; it
+      // is one update instead of one per atom, which keeps Clean Up fast.
+      if (wholeFragment && molecule?.setCoordOfMode) {
+        const coord = molecule.getCoordOfMode?.(K.CoordMode.COORD2D, allowCoordBorrow) ?? {};
+        molecule.setCoordOfMode(
+          { x: (coord.x ?? 0) + first.dx, y: (coord.y ?? 0) + first.dy },
+          K.CoordMode.COORD2D,
+        );
+        continue;
+      }
 
-        node.setCoord2D?.({ x: coord.x + deltaX, y: coord.y + deltaY });
+      // Disconnected parts of one fragment must be moved separately.
+      for (const entry of entries) {
+        for (const node of entry.unit.nodes) {
+          const coord = node.getCoord2D?.(true);
+          if (!coord) continue;
+
+          node.setCoord2D?.({ x: coord.x + entry.dx, y: coord.y + entry.dy });
+        }
       }
     }
   } finally {
     space?.endUpdate?.();
+    editor.endUpdateObject?.();
   }
 
   return true;
@@ -1242,7 +1285,31 @@ export function createEditorBridge(
         return false;
       }
     },
-    async cleanUp() {
+    cleanUp() {
+      const molecules = getMolecules(K, composer).filter(
+        (molecule) => (molecule.getNodeCount?.() ?? 0) > 0,
+      );
+      if (molecules.length === 0) return 0;
+
+      // Step 1: pack the scattered structures into tidy rows. This only moves
+      // whole structures around - no coordinates are recomputed and no
+      // OpenChemLib chunk is pulled in, so the whole call stays cheap.
+      if (arrangeFragments(K, composer, editor)) {
+        repaint();
+      }
+
+      // Step 2: normalise the view around whatever is on the canvas now.
+      fitToView(K, composer, board, {
+        coverage: VIEW_FIT_COVERAGE,
+        maxZoom: MAX_ZOOM,
+        minZoom: MIN_ZOOM,
+      });
+      repaint();
+      board.notifyContentChanged();
+
+      return molecules.length;
+    },
+    async relayout() {
       const molecules = getMolecules(K, composer);
       if (molecules.length === 0) return 0;
 
@@ -1260,7 +1327,8 @@ export function createEditorBridge(
         for (const molecule of molecules) {
           let cleaned = false;
 
-          // Keep the on-screen size stable: Clean Up must not change zoom or bond length.
+          // Relayout keeps each structure's bond length; only the zoom is
+          // normalised afterwards.
           const oldBondLength = getMedianBondLength(K, molecule);
 
           if (OclMolecule) {
@@ -1320,15 +1388,11 @@ export function createEditorBridge(
         space?.endUpdate?.();
       }
 
-      // Cleaning never enlarges the drawing: the zoom stays put and the
-      // structures themselves are moved into a tidy block in the middle of the
-      // view. A single structure that is already on screen is left untouched.
+      // Only the geometry is normalised here. Arranging the structures and
+      // fitting the view is the job of Clean Up view, so the camera stays put
+      // and the two actions never do each other's work.
       repaint();
-
-      if (arrangeFragments(K, composer, editor, board)) {
-        repaint();
-        board.notifyContentChanged();
-      }
+      board.notifyContentChanged();
 
       return molecules.length;
     },
