@@ -28,6 +28,7 @@ npm run preview
 - 单键 / 双键 / 三键 / 楔形键（向上）/ 虚楔键（向下）/ 配位键 / 未知立体键、正负电荷（圆圈内加减号图标）、元素原子、R 基团以及各类环模板。
 - 元素工具既能插入也能替换：选中元素后点击空白处插入新原子，点击画布上已有的原子则**就地替换该原子的元素**（化学键与相邻原子保持不变，可撤销）。
 - 通过 `Kekule.IO.saveFormatData(model, 'smi')` 导出 SMILES，结果保存在 React state 中并复制到剪贴板。
+- **结构校验（RDKit）**：每次编辑后用 RDKit（`@rdkit/rdkit` 的 WebAssembly 构建）检查画布上的每个结构，右侧「结构校验」面板实时显示结果（可收起为窄条）。出现价键异常（例如五价碳）时，面板列出中文说明与 RDKit 原始报错，画布上用红圈标出问题原子，同时禁用「整理」与「在 3D 中查看」，结构修正后自动恢复；非价键类的提示列在「其他提示」中，不会禁用按钮。
 - 支持载入 SMILES 并生成高质量 2D 坐标，同时提供 **整理（Clean Up）**。由于 Kekule 1.0.4 只自带 SMILES 写入器、没有读取器和坐标生成器，这里按需懒加载 OpenChemLib 作为辅助。
 - 整理（Clean Up）会重排每个结构的坐标，并把画布上零散的结构**搬动**到屏幕中央：按原位置从上到下、从左到右排成整齐的行（多行时自动均衡行宽、行内垂直居中，间距一致），以当前视口中心为基准重排；缩放级别保持不变，只有排完仍放不下时才会缩小。单个结构已在屏幕内时不移动任何东西，只修正键角。
 - 支持打开 `.mol`、`.sdf`、`.cml`、`.rxn`、`.kcj`、`.json`、`.smi` 文件。
@@ -61,7 +62,11 @@ src/lib/kekuleBondStyle.ts  化学键线宽 / 双键间距 / 环内双键朝向�
 src/lib/kekuleElectronLabel.ts  把电荷 / 自由基并入原子标签的渲染补丁（离子显示）
 src/lib/elementColors.ts    深色 / 浅色两套元素配色（界面与画布共用）
 src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
+src/lib/rdkit.ts            RDKit WASM 加载、化学问题检测与开发模式自检入口
+src/lib/structureValidation.ts  校验结果模型、价键错误归类与中文说明
 src/components/SettingsModal.tsx  设置弹窗（主题切换、隐藏碳/氢原子）
+src/components/ValidationPanel.tsx  右侧「结构校验」面板
+src/components/ValidationOverlay.tsx  画布上标记问题原子的红圈层
 src/lib/moleculeLayout.ts   无坐标结构的纯 JS 兜底布局算法
 src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 ```
@@ -81,6 +86,17 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 缩放、双击缩放或手势缩放后，会把结构重新放回绘制面中央（同样补偿滚动），因此在任何缩放级别都能向上下左右继续平移。绘制面尺寸始终跟随缩放级别调整，既不会越界，也不会随缩放无限膨胀。
 - 缩放上下限写在 `src/lib/editorBoard.ts`（`MIN_ZOOM` / `MAX_ZOOM`），通过对 `editor.zoomTo` 的包装统一钳制，因此按钮、滚轮、手势、双击与程序化适配（整理 / 适应画布）都走同一套边界。
 - 编辑器的 `change` 事件用于驱动 React 侧的「空画布提示」，Kekule 不管理宿主容器之外的任何 DOM。
+
+## 关于 RDKit 校验
+
+- 校验引擎是 `@rdkit/rdkit`（RDKit MinimalLib 的 WebAssembly 构建，7.4 MB）。wasm 通过 `import wasmUrl from '@rdkit/rdkit/RDKit_minimal.wasm?url'` 交给 Vite 打包，并在 `locateFile` 中指回该地址，因此开发与生产构建都能离线运行。
+- 结构先用 `RDKit.get_mol(smiles, JSON.stringify({ sanitize: false }))` 载入：开启 sanitize 时 RDKit 会直接拒绝非法结构并返回 `null`，拿不到可检查的对象。SMILES 解析失败时退回 molblock 再试一次。
+- `@rdkit/rdkit` 2026.9.2 的类型定义（`dist/RDKit_minimal.d.ts`）与 wasm 绑定中**没有** `detect_chemistry_problems`（`Mol` 原型上没有该方法，wasm 里也没有该符号）。因此这里改用 `RDKit.set_log_capture('rdApp.error')` 捕获 sanitizer 输出的原始异常文本（`Explicit valence for atom # 0 C, 5, is greater than permitted`），再归类为 `AtomValenceException`；如果将来的版本提供了该方法，代码会优先调用 `mol.detect_chemistry_problems()`。
+- 问题原子的定位使用同一结构的 **molblock**（`Kekule.IO.saveFormatData(mol, 'mol')`）：Kekule 写出的 molblock 原子顺序与画布节点顺序一致，RDKit 报错里的原子序号可以直接映射到画布节点；而 SMILES 是按遍历顺序写出的，序号与节点顺序不同，无法用来定位。
+- 每次校验都在 `finally` 中调用 `mol.delete()`（包括临时用来触发 sanitize 的对象），避免 WASM 堆内存泄漏；多次校验通过一条 Promise 队列串行执行，避免日志捕获互相干扰。
+- 校验在编辑事件的下一帧之后再防抖 220ms 触发；`editorBridge` 的 `onContentChange` 会带上递增的 `revision`，React 侧据此决定是否重跑 RDKit。
+- 红圈是一层 `pointer-events-none` 的 SVG 覆盖层，逐帧读取 `editor.objCoordToScreen()`，因此缩放、平移、整理、拖动原子时都会跟随；圆圈半径按相邻键长的一半缩放。
+- 开发模式下可在浏览器控制台调用 `__zephyrleaDetectChemistryProblems({ smiles, molfile })`，或 `__zephyrleaRunDetectionSelfTest()`（用 `C` 与 `C(C)(C)(C)(C)(C)` 打印检测结果）来复现检测逻辑。
 
 ## 键盘快捷键
 

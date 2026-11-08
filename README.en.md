@@ -26,6 +26,7 @@ npm run preview
 - Single / double / triple / solid wedge / hashed wedge / dative / wavy bonds, positive/negative charges (drawn as circled +/− badges), element stamps, R-group and ring templates.
 - Element tools both insert and replace: after picking an element, clicking empty canvas inserts a new atom, while clicking an existing atom **replaces its element in place** (bonds and neighbours untouched, undoable).
 - SMILES export through `Kekule.IO.saveFormatData(model, 'smi')`, stored in React state and copied to the clipboard.
+- **Structure validation (RDKit)**: every edit is checked with RDKit (the `@rdkit/rdkit` WebAssembly build) and the result shows up in the new **Structure check** panel on the right (collapsible to a narrow rail). A valence problem (e.g. a five-valent carbon) lists a Chinese explanation plus RDKit's raw message, draws a red ring around the offending atom on the canvas and disables **Clean Up** and **View in 3D** until the structure is fixed; other chemistry notes are listed separately and never disable the buttons.
 - SMILES import with high-quality 2D coordinates, plus **Clean Up** (OpenChemLib is lazy-loaded as a helper because Kekule 1.0.4 ships a SMILES writer but no SMILES reader/layout engine).
 - Clean Up re-lays out coordinates and **moves** the scattered structures to the middle of the screen: they are packed into tidy rows (top-to-bottom, left-to-right, rows balanced and vertically centred, even spacing) around the current viewport centre. The zoom level is kept; it only shrinks when the packed block cannot fit. A single structure that is already on screen is never moved, only its bond geometry is fixed.
 - Open `.mol`, `.sdf`, `.cml`, `.rxn`, `.kcj`, `.json` and `.smi` files.
@@ -59,7 +60,11 @@ src/lib/kekuleBondStyle.ts  Render patch: bond stroke width, double-bond spacing
 src/lib/kekuleElectronLabel.ts  Render patch: fold charges/radicals into atom labels
 src/lib/elementColors.ts    Dark and light element palettes (shell + canvas)
 src/lib/settings.ts         Settings model, localStorage persistence, theme application
+src/lib/rdkit.ts            RDKit WASM loader, chemistry-problem detection, dev self-test
+src/lib/structureValidation.ts  Validation model, valence classification, Chinese copy
 src/components/SettingsModal.tsx  Settings modal (theme switch, hide C/H atoms)
+src/components/ValidationPanel.tsx  Right-hand "Structure check" panel
+src/components/ValidationOverlay.tsx  Red-ring overlay marking problem atoms
 src/lib/moleculeLayout.ts   Pure-JS fallback layout for coordinate-less structures
 src/index.css               Tailwind entry + Kekule dark-shell overrides
 ```
@@ -79,6 +84,17 @@ src/index.css               Tailwind entry + Kekule dark-shell overrides
 - Zooming (buttons, double click or gestures) re-anchors the drawing in the middle of the surface with the same scroll compensation, so panning stays available at every zoom level, and the surface is re-sized for the new zoom instead of growing without bound.
 - The zoom bounds live in `src/lib/editorBoard.ts` (`MIN_ZOOM` / `MAX_ZOOM`) and are enforced by wrapping `editor.zoomTo`, so buttons, wheel, gestures, double click and programmatic fits (Clean Up / Reset Zoom) all share one limit.
 - The composer's `change` events drive the React empty-canvas hint; no DOM outside the host is managed by Kekule.
+
+## RDKit validation notes
+
+- The checker is `@rdkit/rdkit` (the RDKit MinimalLib WebAssembly build, 7.4 MB). The `.wasm` is imported as `import wasmUrl from '@rdkit/rdkit/RDKit_minimal.wasm?url'` so Vite fingerprints and serves it, and `locateFile` points RDKit at that URL — dev and production builds both work offline.
+- Structures are loaded with `RDKit.get_mol(smiles, JSON.stringify({ sanitize: false }))`: with sanitizing enabled RDKit simply rejects an invalid structure and returns `null`, leaving nothing to inspect. If the SMILES cannot be parsed the molblock is tried next.
+- The types in `@rdkit/rdkit` 2026.9.2 (`dist/RDKit_minimal.d.ts`) and the wasm bindings expose **no** `detect_chemistry_problems` (the method is absent from the `Mol` prototype and the symbol does not exist in the wasm). The check therefore captures RDKit's sanitizer output with `RDKit.set_log_capture('rdApp.error')` — the very same exception text (`Explicit valence for atom # 0 C, 5, is greater than permitted`) — and classifies it as `AtomValenceException`. If a future release exposes the dedicated method, `mol.detect_chemistry_problems()` is used first.
+- Problem atoms are located through the structure's **molblock** (`Kekule.IO.saveFormatData(mol, 'mol')`): Kekule writes atoms in canvas-node order, so RDKit's atom index maps straight onto a Kekule node. SMILES is written in traversal order, so its indices do not match the node order and cannot be used for highlighting.
+- Every check calls `mol.delete()` in a `finally` block (including the temporary object used to trigger sanitization) to keep the WASM heap clean; checks run one at a time through a promise queue so the shared log capture cannot interleave.
+- Validation runs one frame after the editor's change event plus a 220 ms debounce; `editorBridge`'s `onContentChange` carries an increasing `revision`, which is what re-triggers RDKit.
+- The red rings are a `pointer-events-none` SVG layer that re-reads `editor.objCoordToScreen()` every frame, so they follow zooming, panning, Clean Up and atom dragging; the radius is derived from the neighbouring bond length.
+- In development the browser console exposes `__zephyrleaDetectChemistryProblems({ smiles, molfile })` and `__zephyrleaRunDetectionSelfTest()` (which prints the result for `C` and `C(C)(C)(C)(C)(C)`).
 
 ## Keyboard shortcuts
 

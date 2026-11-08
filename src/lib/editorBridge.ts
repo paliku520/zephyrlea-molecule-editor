@@ -9,6 +9,7 @@ import { installLabelBaseline } from './kekuleLabelStyle';
 import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
 import { DEFAULT_SETTINGS, type AppSettings, type ThemeMode } from './settings';
+import type { ValidationTarget } from './structureValidation';
 
 export type ToolId =
   | 'select'
@@ -34,9 +35,17 @@ export type ToolId =
   | `element:${string}`;
 
 export interface EditorBridgeCallbacks {
-  onContentChange?: (hasContent: boolean) => void;
+  /** `revision` grows with every edit so subscribers can re-run expensive checks. */
+  onContentChange?: (hasContent: boolean, revision: number) => void;
   onSelectionChange?: (selection: SelectionSnapshot | null) => void;
   onZoomChange?: (zoom: number) => void;
+}
+
+/** Circle drawn around an atom by the validation overlay (viewport pixels). */
+export interface AtomScreenRing {
+  x: number;
+  y: number;
+  radius: number;
 }
 
 /** Selection state used by the floating transform bar. */
@@ -57,6 +66,10 @@ export interface MoleculeEditorBridge {
   setTool(tool: ToolId): boolean;
   hasContent(): boolean;
   exportSmiles(): string;
+  /** Every molecule with a molblock whose atom order matches its Kekule nodes. */
+  collectValidationTargets(): ValidationTarget[];
+  /** Circle around one atom, in viewport pixels. */
+  getAtomScreenRing(atom: any): AtomScreenRing | null;
   importSmiles(smiles: string): Promise<boolean>;
   cleanUp(): Promise<number>;
   clear(): void;
@@ -1065,6 +1078,7 @@ export function createEditorBridge(
     getMolecules(K, composer).some((molecule) => (molecule.getNodeCount?.() ?? 0) > 0);
 
   let pendingContentCheck = false;
+  let contentRevision = 0;
   const notifyContentChange = () => {
     if (pendingContentCheck || destroyed) return;
 
@@ -1077,7 +1091,8 @@ export function createEditorBridge(
         repaint();
       }
 
-      callbacks.onContentChange?.(hasContent());
+      contentRevision += 1;
+      callbacks.onContentChange?.(hasContent(), contentRevision);
       board.notifyContentChanged();
     });
   };
@@ -1119,6 +1134,80 @@ export function createEditorBridge(
       } catch (error) {
         console.error('[Kekule] Failed to export SMILES', error);
         return '';
+      }
+    },
+    collectValidationTargets() {
+      const targets: ValidationTarget[] = [];
+
+      for (const molecule of getMolecules(K, composer)) {
+        const atoms: any[] = molecule.getNodes?.() ?? [];
+        if (atoms.length === 0) continue;
+
+        let molfile = '';
+        let smiles = '';
+
+        try {
+          molfile = K.IO.saveFormatData(molecule, 'mol') ?? '';
+        } catch (error) {
+          console.warn('[Validation] Molfile export failed', error);
+        }
+
+        try {
+          smiles = K.IO.saveFormatData(molecule, 'smi') ?? '';
+        } catch (error) {
+          console.warn('[Validation] SMILES export failed', error);
+        }
+
+        if (!molfile && !smiles) continue;
+
+        targets.push({
+          smiles: typeof smiles === 'string' ? smiles : '',
+          molfile: typeof molfile === 'string' ? molfile : '',
+          atoms,
+        });
+      }
+
+      return targets;
+    },
+    getAtomScreenRing(atom) {
+      try {
+        const coord = atom?.getAbsCoord2D?.() ?? atom?.getCoord2D?.();
+        const point = coord ? editor.objCoordToScreen?.(coord) : null;
+        const client = editor.getEditClientElem?.();
+        if (!point || !client) return null;
+
+        let radius = 0;
+
+        for (const connector of atom.getLinkedConnectors?.() ?? []) {
+          const count = connector.getConnectedObjCount?.() ?? 0;
+
+          for (let index = 0; index < count; index += 1) {
+            const other = connector.getConnectedObjAt?.(index);
+            if (!other || other === atom) continue;
+
+            const otherCoord = other.getAbsCoord2D?.() ?? other.getCoord2D?.();
+            const otherPoint = otherCoord ? editor.objCoordToScreen?.(otherCoord) : null;
+            if (!otherPoint) continue;
+
+            radius = Math.hypot(otherPoint.x - point.x, otherPoint.y - point.y) * 0.44;
+            break;
+          }
+
+          if (radius > 0) break;
+        }
+
+        if (radius <= 0) radius = 16 * (editor.getCurrZoom?.() ?? 1);
+
+        const rect = client.getBoundingClientRect();
+
+        return {
+          x: rect.left + point.x,
+          y: rect.top + point.y,
+          radius: Math.min(Math.max(radius, 9), 72),
+        };
+      } catch {
+        // The atom may have been deleted between validation and this frame.
+        return null;
       }
     },
     async importSmiles(smiles) {
@@ -1388,7 +1477,7 @@ export function createEditorBridge(
     applyTool(K, composer, 'single');
     repaint();
     board.centerEmptyView();
-    callbacks.onContentChange?.(hasContent());
+    callbacks.onContentChange?.(hasContent(), contentRevision);
     callbacks.onZoomChange?.(editor.getCurrZoom?.() ?? 1);
   });
 

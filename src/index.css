@@ -29,6 +29,7 @@
   --color-line: var(--shell-line);
   --color-line-strong: var(--shell-line-strong);
   --color-danger: var(--shell-danger);
+  --color-warning: var(--shell-warning);
 }
 
 :root {
@@ -58,6 +59,7 @@
   --shell-line-strong: rgba(255, 255, 255, 0.14);
   --shell-dot: rgba(255, 255, 255, 0.14);
   --shell-danger: #f07171;
+  --shell-warning: #e0b062;
   --shell-shadow: rgba(0, 0, 0, 0.55);
   --shell-scrim: rgba(8, 8, 10, 0.55);
   --shell-scrollbar-thumb: rgba(255, 255, 255, 0.22);
@@ -88,6 +90,7 @@
   --shell-line-strong: rgba(17, 24, 39, 0.16);
   --shell-dot: rgba(17, 24, 39, 0.16);
   --shell-danger: #c62f2f;
+  --shell-warning: #a46a12;
   --shell-shadow: rgba(15, 23, 42, 0.18);
   --shell-scrim: rgba(15, 23, 42, 0.28);
   --shell-scrollbar-thumb: rgba(17, 24, 39, 0.22);
@@ -117,6 +120,22 @@ input {
   background-image: radial-gradient(circle, var(--shell-dot) 1px, transparent 1px);
   background-size: 22px 22px;
   background-position: 0 0;
+}
+
+/* Red rings drawn over atoms that failed RDKit's valence check. */
+.zephyrlea-issue-ring {
+  filter: drop-shadow(0 0 5px var(--shell-danger));
+  animation: zephyrlea-issue-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes zephyrlea-issue-pulse {
+  0%,
+  100% {
+    opacity: 0.95;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ---------------------------------------------------------------------------

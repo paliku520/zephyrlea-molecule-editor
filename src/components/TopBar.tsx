@@ -6,6 +6,8 @@ import { MAX_ZOOM, MIN_ZOOM } from '../lib/editorBoard';
 interface TopBarProps {
   ready: boolean;
   zoom: number;
+  /** True when RDKit reports a blocking chemistry problem (e.g. valence error). */
+  blocked?: boolean;
   /** `bottom` docks the bar along the bottom edge (border on top). */
   placement?: 'top' | 'bottom';
   smiles: string;
@@ -28,6 +30,7 @@ interface TopBarProps {
 export function TopBar({
   ready,
   zoom,
+  blocked = false,
   placement = 'top',
   smiles,
   onSmilesChange,
@@ -116,8 +119,8 @@ export function TopBar({
         <button
           type="button"
           onClick={onCleanUp}
-          disabled={!ready}
-          title="整理结构 (Clean Up)"
+          disabled={!ready || blocked}
+          title={blocked ? '存在价键错误，无法整理' : '整理结构 (Clean Up)'}
           className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
         >
           <Wand2 size={16} strokeWidth={1.7} />
@@ -152,7 +155,8 @@ export function TopBar({
         <button
           type="button"
           onClick={onView3D}
-          disabled={!ready}
+          disabled={!ready || blocked}
+          title={blocked ? '存在价键错误，无法生成 3D 视图' : '在 3D 中查看'}
           className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
         >
           <Box size={16} strokeWidth={1.7} />

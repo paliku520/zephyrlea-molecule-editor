@@ -5,6 +5,8 @@ import { LeftToolRail } from './LeftToolRail';
 import { ElementStrip } from './ElementStrip';
 import { SelectionToolbar } from './SelectionToolbar';
 import { SettingsModal } from './SettingsModal';
+import { ValidationPanel, type EngineState, type ValidationState } from './ValidationPanel';
+import { ValidationOverlay, type ValidationMark } from './ValidationOverlay';
 import { waitForKekule } from '../lib/kekule';
 import {
   createEditorBridge,
@@ -12,7 +14,13 @@ import {
   type SelectionSnapshot,
   type ToolId,
 } from '../lib/editorBridge';
+import { loadRDKit } from '../lib/rdkit';
 import { applyThemeToDocument, loadSettings, saveSettings, type AppSettings } from '../lib/settings';
+import {
+  validateStructure,
+  type StructureValidation,
+  type ValidationTarget,
+} from '../lib/structureValidation';
 
 interface ToastState {
   kind: 'success' | 'error' | 'info';
@@ -35,6 +43,25 @@ function ToastIcon({ kind }: { kind: ToastState['kind'] }) {
   return <Info size={16} strokeWidth={1.9} className="mt-0.5 shrink-0 text-ink-muted" />;
 }
 
+/** Maps RDKit atom indexes back to the Kekule atoms drawn on the canvas. */
+function buildValidationMarks(
+  validation: StructureValidation,
+  targets: ValidationTarget[],
+): ValidationMark[] {
+  const marks: ValidationMark[] = [];
+
+  for (const issue of validation.issues) {
+    if (issue.atomIndex === null) continue;
+
+    const atom = targets[issue.moleculeIndex]?.atoms[issue.atomIndex];
+    if (!atom) continue;
+
+    marks.push({ key: issue.key, atom });
+  }
+
+  return marks;
+}
+
 export function MoleculeEditor() {
   const hostRef = useRef<HTMLDivElement>(null);
   const bridgeRef = useRef<MoleculeEditorBridge | null>(null);
@@ -51,6 +78,15 @@ export function MoleculeEditor() {
   const [zoom, setZoom] = useState(1);
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [contentRevision, setContentRevision] = useState(0);
+  const [engine, setEngine] = useState<EngineState>('loading');
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const [engineAttempt, setEngineAttempt] = useState(0);
+  const [validationStatus, setValidationStatus] = useState<ValidationState>('idle');
+  const [validation, setValidation] = useState<StructureValidation | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationMarks, setValidationMarks] = useState<ValidationMark[]>([]);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -96,7 +132,10 @@ export function MoleculeEditor() {
           K,
           hostRef.current,
           {
-            onContentChange: (nextHasContent) => setHasContent(nextHasContent),
+            onContentChange: (nextHasContent, revision) => {
+              setHasContent(nextHasContent);
+              setContentRevision(revision);
+            },
             onSelectionChange: setSelection,
             onZoomChange: setZoom,
           },
@@ -154,6 +193,95 @@ export function MoleculeEditor() {
     saveSettings(settings);
     bridgeRef.current?.applySettings(settings);
   }, [settings]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setEngine('loading');
+    setEngineError(null);
+
+    loadRDKit()
+      .then(() => {
+        if (!cancelled) setEngine('ready');
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        console.error('[RDKit] Failed to load', error);
+        setEngine('error');
+        setEngineError(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [engineAttempt]);
+
+  useEffect(() => {
+    if (!ready) {
+      setValidation(null);
+      setValidationStatus('idle');
+      setValidationMarks([]);
+      return;
+    }
+
+    const bridge = bridgeRef.current;
+    if (!bridge) return;
+
+    if (!hasContent) {
+      setValidation(null);
+      setValidationError(null);
+      setValidationStatus('done');
+      setValidationMarks([]);
+      return;
+    }
+
+    if (engine !== 'ready') {
+      setValidationStatus('checking');
+      return;
+    }
+
+    let cancelled = false;
+    setValidationStatus('checking');
+
+    const timer = window.setTimeout(() => {
+      const targets = bridge.collectValidationTargets();
+
+      if (targets.length === 0) {
+        setValidation(null);
+        setValidationError(null);
+        setValidationStatus('done');
+        setValidationMarks([]);
+        return;
+      }
+
+      validateStructure(targets)
+        .then((result) => {
+          if (cancelled) return;
+
+          setValidation(result);
+          setValidationError(null);
+          setValidationStatus('done');
+          setValidationMarks(buildValidationMarks(result, targets));
+        })
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          console.error('[Validation] Check failed', error);
+          setValidationError(error instanceof Error ? error.message : String(error));
+          setValidationStatus('error');
+        });
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [ready, hasContent, contentRevision, engine]);
+
+  const structureBlocked = validation?.issues.some((issue) => issue.blocking) ?? false;
+
+  useEffect(() => {
+    if (structureBlocked) setPanelCollapsed(false);
+  }, [structureBlocked]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -238,13 +366,18 @@ export function MoleculeEditor() {
   );
 
   const handleCleanUp = useCallback(async () => {
+    if (structureBlocked) {
+      showToast({ kind: 'error', title: '存在价键错误，无法整理结构', detail: '请先修正红圈标记的原子。' });
+      return;
+    }
+
     const cleaned = (await bridgeRef.current?.cleanUp()) ?? 0;
     if (cleaned > 0) {
       showToast({ kind: 'success', title: '结构已整理' });
     } else {
       showToast({ kind: 'info', title: '画布上还没有结构' });
     }
-  }, [showToast]);
+  }, [showToast, structureBlocked]);
 
   const handleClear = useCallback(() => {
     bridgeRef.current?.clear();
@@ -281,6 +414,11 @@ export function MoleculeEditor() {
   }, [showToast]);
 
   const handleView3D = useCallback(() => {
+    if (structureBlocked) {
+      showToast({ kind: 'error', title: '存在价键错误，无法生成 3D 视图', detail: '请先修正红圈标记的原子。' });
+      return;
+    }
+
     const smiles = bridgeRef.current?.exportSmiles() ?? '';
     console.log('[3D preview] Not implemented yet. Current SMILES:', smiles);
     showToast({
@@ -288,7 +426,7 @@ export function MoleculeEditor() {
       title: '3D 视图即将推出',
       detail: '当前阶段仅输出 SMILES，3D 渲染逻辑留待下一步接入。',
     });
-  }, [showToast]);
+  }, [showToast, structureBlocked]);
 
   const handleShortcuts = useCallback(() => {
     showToast({
@@ -319,6 +457,7 @@ export function MoleculeEditor() {
       ready={ready}
       zoom={zoom}
       placement={placement}
+      blocked={structureBlocked}
       smiles={smilesInput}
       onSmilesChange={setSmilesInput}
       onSubmitSmiles={() => void handleLoadSmiles()}
@@ -349,52 +488,68 @@ export function MoleculeEditor() {
         <div className="flex min-w-0 flex-1 flex-col">
           {!bottomDocked && renderElementStrip('top')}
 
-          <main className="dot-grid relative min-h-0 flex-1 overflow-hidden">
-            <div ref={hostRef} className="kekule-host absolute inset-0" />
+          <div className="flex min-h-0 flex-1">
+            <main className="dot-grid relative min-h-0 flex-1 overflow-hidden">
+              <div ref={hostRef} className="kekule-host absolute inset-0" />
 
-            {ready && (
-              <SelectionToolbar
-                bridge={bridgeRef.current}
-                selection={selection}
-                bottomInset={bottomDocked ? BOTTOM_CHROME_PX : 0}
-              />
-            )}
+              {ready && (
+                <SelectionToolbar
+                  bridge={bridgeRef.current}
+                  selection={selection}
+                  bottomInset={bottomDocked ? BOTTOM_CHROME_PX : 0}
+                />
+              )}
 
-            {!ready && !initError && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex items-center gap-3 text-[13px] text-ink-muted">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-ink/60" />
-                  正在加载 Kekule.js…
+              {ready && <ValidationOverlay bridge={bridgeRef.current} marks={validationMarks} />}
+
+              {!ready && !initError && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="flex items-center gap-3 text-[13px] text-ink-muted">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-ink/60" />
+                    正在加载 Kekule.js…
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {initError && (
-              <div className="absolute inset-0 flex items-center justify-center bg-canvas">
-                <div className="max-w-md rounded-xl border border-line bg-panel p-6 text-center shadow-2xl">
-                  <AlertTriangle size={22} className="mx-auto text-danger" />
-                  <p className="mt-3 text-sm font-medium text-ink">Kekule.js 初始化失败</p>
-                  <p className="mt-2 break-words text-xs leading-relaxed text-ink-muted">{initError}</p>
-                  <button
-                    type="button"
-                    onClick={() => setInitAttempt((attempt) => attempt + 1)}
-                    className="mt-4 rounded-md border border-line-strong bg-hover px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-hover-strong"
-                  >
-                    重试
-                  </button>
+              {initError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-canvas">
+                  <div className="max-w-md rounded-xl border border-line bg-panel p-6 text-center shadow-2xl">
+                    <AlertTriangle size={22} className="mx-auto text-danger" />
+                    <p className="mt-3 text-sm font-medium text-ink">Kekule.js 初始化失败</p>
+                    <p className="mt-2 break-words text-xs leading-relaxed text-ink-muted">{initError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setInitAttempt((attempt) => attempt + 1)}
+                      className="mt-4 rounded-md border border-line-strong bg-hover px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-hover-strong"
+                    >
+                      重试
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {ready && !hasContent && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="flex items-center gap-2 text-[13px] font-normal text-ink-muted">
-                  <Search size={15} strokeWidth={1.7} />
-                  点击开始绘制，粘贴 SMILES，或打开文件
+              {ready && !hasContent && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="flex items-center gap-2 text-[13px] font-normal text-ink-muted">
+                    <Search size={15} strokeWidth={1.7} />
+                    点击开始绘制，粘贴 SMILES，或打开文件
+                  </div>
                 </div>
-              </div>
-            )}
-          </main>
+              )}
+            </main>
+
+            <ValidationPanel
+              collapsed={panelCollapsed}
+              onToggle={() => setPanelCollapsed((collapsed) => !collapsed)}
+              engine={engine}
+              engineError={engineError}
+              onReloadEngine={() => setEngineAttempt((attempt) => attempt + 1)}
+              status={validationStatus}
+              validation={validation}
+              error={validationError}
+              hasContent={hasContent}
+            />
+          </div>
         </div>
       </div>
 
