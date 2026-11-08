@@ -1,4 +1,4 @@
-import { Focus, Maximize2, Minimize2, Move, Rotate3d } from 'lucide-react';
+import { Camera, Focus, Maximize2, Minimize2, Move, Rotate3d } from 'lucide-react';
 import { IconRadioGroup, type IconRadioOption } from './ui/IconRadioGroup';
 import { MODEL_3D_STYLE_CHOICES } from './Model3DSwitch';
 import {
@@ -13,6 +13,8 @@ interface Viewer3DToolbarProps {
   dragMode: Viewer3DDragMode;
   onDragModeChange: (mode: Viewer3DDragMode) => void;
   onResetView: () => void;
+  /** Save the current 3D canvas as a PNG. */
+  onScreenshot: () => void;
   maximized: boolean;
   onToggleMaximized: () => void;
   /** Reset is only meaningful once the conformer is on screen. */
@@ -36,13 +38,14 @@ export const VIEWER_3D_DRAG_CHOICES: IconRadioOption<Viewer3DDragMode>[] =
     icon: DRAG_ICONS[option.value],
   }));
 
-/** Single docked pill: model style, drag mode, divider, reset view, maximize. */
+/** Single docked pill: model style, drag mode, divider, reset view, screenshot, maximize. */
 export function Viewer3DToolbar({
   modelStyle,
   onModelStyleChange,
   dragMode,
   onDragModeChange,
   onResetView,
+  onScreenshot,
   maximized,
   onToggleMaximized,
   ready,
@@ -76,6 +79,17 @@ export function Viewer3DToolbar({
         className={ACTION_BUTTON}
       >
         <Focus size={15} strokeWidth={1.9} />
+      </button>
+
+      <button
+        type="button"
+        onClick={onScreenshot}
+        disabled={!ready}
+        aria-label="保存 3D 截图"
+        title="保存 3D 截图（PNG）"
+        className={ACTION_BUTTON}
+      >
+        <Camera size={15} strokeWidth={1.9} />
       </button>
 
       <button

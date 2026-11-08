@@ -1,11 +1,15 @@
-import { useRef } from 'react';
-import { Box, Download, FileUp, Keyboard, LayoutGrid, Redo2, Scan, Settings, Trash2, Undo2, Wand2, ZoomIn, ZoomOut } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Box, ChevronDown, Download, FileText, FileUp, Image as ImageIcon, Keyboard, LayoutGrid, Redo2, Scan, Settings, Spline, Trash2, Undo2, Wand2, ZoomIn, ZoomOut } from 'lucide-react';
 import { IconButton } from './ui/IconButton';
 import { MAX_ZOOM, MIN_ZOOM } from '../lib/editorBoard';
+
+type ExportFormat = 'png' | 'svg';
 
 interface TopBarProps {
   ready: boolean;
   zoom: number;
+  /** False when nothing is drawn, which disables the export menu. */
+  hasContent?: boolean;
   /** True when RDKit reports a blocking chemistry problem (e.g. valence error). */
   blocked?: boolean;
   /** True while Clean Up / Relayout is running, so both cannot be queued twice. */
@@ -24,15 +28,41 @@ interface TopBarProps {
   onZoomOut: () => void;
   onResetZoom: () => void;
   onClear: () => void;
-  onExport: () => void;
+  onExportSmiles: () => void;
+  onExportImage: (format: ExportFormat) => void;
   onView3D: () => void;
   onShortcuts: () => void;
   onSettings: () => void;
 }
 
+interface ExportMenuItemProps {
+  icon: typeof FileText;
+  title: string;
+  hint: string;
+  onSelect: () => void;
+}
+
+function ExportMenuItem({ icon: Icon, title, hint, onSelect }: ExportMenuItemProps) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onSelect}
+      className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-hover-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+    >
+      <Icon size={15} strokeWidth={1.8} className="mt-0.5 shrink-0 text-ink-muted" />
+      <span className="min-w-0">
+        <span className="block text-[12.5px] font-medium text-ink">{title}</span>
+        <span className="block text-[10.5px] text-ink-faint">{hint}</span>
+      </span>
+    </button>
+  );
+}
+
 export function TopBar({
   ready,
   zoom,
+  hasContent = true,
   blocked = false,
   busy = false,
   placement = 'top',
@@ -48,15 +78,48 @@ export function TopBar({
   onZoomOut,
   onResetZoom,
   onClear,
-  onExport,
+  onExportSmiles,
+  onExportImage,
   onView3D,
   onShortcuts,
   onSettings,
 }: TopBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const atMinZoom = zoom <= MIN_ZOOM + 1e-3;
   const atMaxZoom = zoom >= MAX_ZOOM - 1e-3;
   const borderClass = placement === 'bottom' ? 'border-t' : 'border-b';
+
+  useEffect(() => {
+    if (!exportOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!exportMenuRef.current?.contains(event.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExportOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [exportOpen]);
+
+  // Clearing the board or a re-init makes the menu stale.
+  useEffect(() => {
+    if (!ready || !hasContent) setExportOpen(false);
+  }, [ready, hasContent]);
+
+  const selectExport = (action: () => void) => {
+    setExportOpen(false);
+    action();
+  };
 
   return (
     <header
@@ -162,15 +225,54 @@ export function TopBar({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
-        <button
-          type="button"
-          onClick={onExport}
-          disabled={!ready}
-          className="inline-flex h-9 items-center gap-2.5 rounded-lg bg-accent px-[18px] text-[13px] font-semibold text-accent-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(0,0,0,0.3)] transition-colors hover:bg-accent-strong active:bg-accent-deep disabled:pointer-events-none disabled:opacity-40"
-        >
-          <Download size={16} strokeWidth={2} />
-          <span>导出</span>
-        </button>
+        <div ref={exportMenuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setExportOpen((open) => !open)}
+            disabled={!ready || !hasContent}
+            aria-haspopup="menu"
+            aria-expanded={exportOpen}
+            title={hasContent ? '导出 SMILES 文本或分子图片' : '画布为空，暂无可导出的内容'}
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-3.5 text-[13px] font-semibold text-accent-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_2px_rgba(0,0,0,0.3)] transition-colors hover:bg-accent-strong active:bg-accent-deep disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Download size={16} strokeWidth={2} />
+            <span>导出</span>
+            <ChevronDown
+              size={14}
+              strokeWidth={2.2}
+              className={exportOpen ? 'rotate-180 transition-transform' : 'transition-transform'}
+            />
+          </button>
+
+          {exportOpen && (
+            <div
+              role="menu"
+              aria-label="导出格式"
+              className={`absolute right-0 z-30 w-[236px] rounded-xl border border-line-strong bg-popover p-1 shadow-[0_18px_48px_var(--shell-shadow)] ${
+                placement === 'bottom' ? 'bottom-full mb-2' : 'top-full mt-2'
+              }`}
+            >
+              <ExportMenuItem
+                icon={FileText}
+                title="SMILES 文本"
+                hint="复制到剪贴板"
+                onSelect={() => selectExport(onExportSmiles)}
+              />
+              <ExportMenuItem
+                icon={ImageIcon}
+                title="PNG 图片"
+                hint="2× 高清位图，透明背景"
+                onSelect={() => selectExport(() => onExportImage('png'))}
+              />
+              <ExportMenuItem
+                icon={Spline}
+                title="SVG 矢量图"
+                hint="透明背景，无限放大不失真"
+                onSelect={() => selectExport(() => onExportImage('svg'))}
+              />
+            </div>
+          )}
+        </div>
 
         <button
           type="button"

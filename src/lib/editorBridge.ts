@@ -12,6 +12,12 @@ import { installLabelBaseline } from './kekuleLabelStyle';
 import { installAtomOnlyNodePicker, installNodeSetter, installPeriodicTablePicker } from './kekuleNodeSetter';
 import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
+import {
+  EmptyStructureError,
+  exportMoleculeImage,
+  type MoleculeImage,
+  type MoleculeImageFormat,
+} from './moleculeExport';
 import { DEFAULT_SETTINGS, type AppSettings, type ThemeMode } from './settings';
 import type { ValidationTarget } from './structureValidation';
 
@@ -78,6 +84,8 @@ export interface MoleculeEditorBridge {
   setTool(tool: ToolId): boolean;
   hasContent(): boolean;
   exportSmiles(): string;
+  /** Render every structure on the board into a PNG or SVG file. */
+  exportImage(format: MoleculeImageFormat): Promise<MoleculeImage | null>;
   /** Every molecule with a molblock whose atom order matches its Kekule nodes. */
   collectValidationTargets(): ValidationTarget[];
   /** Circle around one atom, in viewport pixels. */
@@ -1206,6 +1214,25 @@ export function createEditorBridge(
       } catch (error) {
         console.error('[Kekule] Failed to export SMILES', error);
         return '';
+      }
+    },
+    async exportImage(format) {
+      if (!hasContent()) return null;
+
+      const molecules = getMolecules(K, composer);
+      // The chem space root keeps every molecule at its own coordinates, so a
+      // single painter renders the whole board exactly as laid out.
+      const root = composer.getEditor?.()?.getChemSpace?.()?.getRoot?.() ?? null;
+      const chemObj = root ?? molecules[0];
+      if (!chemObj) return null;
+
+      try {
+        return await exportMoleculeImage(K, chemObj, format, {
+          bounds: getUnionBox(K, molecules),
+        });
+      } catch (error) {
+        if (error instanceof EmptyStructureError) return null;
+        throw error;
       }
     },
     collectValidationTargets() {

@@ -19,6 +19,7 @@ import {
   type ToolId,
 } from '../lib/editorBridge';
 import { loadRDKit } from '../lib/rdkit';
+import { downloadFile } from '../lib/download';
 import { applyThemeToDocument, loadSettings, saveSettings, type AppSettings } from '../lib/settings';
 import {
   validateStructure,
@@ -462,7 +463,7 @@ export function MoleculeEditor() {
     setSmilesInput('');
   }, []);
 
-  const handleExport = useCallback(() => {
+  const handleExportSmiles = useCallback(() => {
     const smiles = bridgeRef.current?.exportSmiles() ?? '';
     console.log('[Kekule SMILES]', smiles);
 
@@ -488,6 +489,42 @@ export function MoleculeEditor() {
       9000,
     );
   }, [showToast]);
+
+  const handleExportImage = useCallback(
+    async (format: 'png' | 'svg') => {
+      const bridge = bridgeRef.current;
+      if (!bridge) return;
+
+      const label = format.toUpperCase();
+      showToast({ kind: 'pending', title: `正在导出 ${label} 图片…` }, 0);
+
+      try {
+        const image = await bridge.exportImage(format);
+        if (!image) {
+          showToast({ kind: 'error', title: '画布为空', detail: '请先绘制结构或载入 SMILES。' });
+          return;
+        }
+
+        downloadFile(image.blob, image.fileName);
+        showToast(
+          {
+            kind: 'success',
+            title: `已导出 ${label} 图片`,
+            detail: `${image.fileName} · ${image.width} × ${image.height}`,
+          },
+          9000,
+        );
+      } catch (error) {
+        console.error(`[Export] ${label} export failed`, error);
+        showToast({
+          kind: 'error',
+          title: `导出 ${label} 失败`,
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+    [showToast],
+  );
 
   const handleView3D = useCallback(() => {
     if (structureBlocked) {
@@ -539,6 +576,7 @@ export function MoleculeEditor() {
     <TopBar
       ready={ready}
       zoom={zoom}
+      hasContent={hasContent}
       placement={placement}
       blocked={structureBlocked}
       busy={busyTask !== null}
@@ -554,7 +592,8 @@ export function MoleculeEditor() {
       onZoomOut={() => bridgeRef.current?.zoomOut()}
       onResetZoom={() => bridgeRef.current?.resetZoom()}
       onClear={handleClear}
-      onExport={handleExport}
+      onExportSmiles={handleExportSmiles}
+      onExportImage={(format) => void handleExportImage(format)}
       onView3D={handleView3D}
       onShortcuts={handleShortcuts}
       onSettings={() => setSettingsOpen(true)}
@@ -716,6 +755,7 @@ export function MoleculeEditor() {
         modelStyle={settings.model3DStyle}
         onModelStyleChange={(model3DStyle) => setSettings((current) => ({ ...current, model3DStyle }))}
         toolbarAlign={settings.viewer3DToolbarAlign}
+        onNotice={showToast}
         onClose={() => setViewer3DOpen(false)}
       />
     </div>

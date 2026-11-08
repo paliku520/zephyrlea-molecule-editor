@@ -8,6 +8,7 @@ import {
 import { AlertTriangle, Box, RotateCcw, X } from 'lucide-react';
 import type { AtomStyleSpec, GLViewer } from '3dmol';
 import { computeConformer, type Conformer3D } from '../lib/conformer3d';
+import { downloadFile, exportFileName } from '../lib/download';
 import type {
   Model3DStyle,
   ThemeMode,
@@ -25,6 +26,8 @@ interface Viewer3DModalProps {
   modelStyle: Model3DStyle;
   onModelStyleChange: (style: Model3DStyle) => void;
   toolbarAlign: Viewer3DToolbarAlign;
+  /** Surface a short confirmation (screenshot saved, failure) to the shell. */
+  onNotice?: (notice: { kind: 'success' | 'error'; title: string; detail?: string }) => void;
   onClose: () => void;
 }
 
@@ -124,6 +127,7 @@ export function Viewer3DModal({
   modelStyle,
   onModelStyleChange,
   toolbarAlign,
+  onNotice,
   onClose,
 }: Viewer3DModalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -246,6 +250,32 @@ export function Viewer3DModal({
     if (!viewer) return;
     resetView(viewer, modelStyleRef.current);
   }, []);
+
+  const handleScreenshot = useCallback(() => {
+    const viewer = viewerRef.current as (GLViewer & { pngURI?: () => string }) | null;
+    if (!viewer) return;
+
+    try {
+      // 3Dmol keeps the drawing buffer, so the WebGL canvas can be read back.
+      const dataUrl = viewer.pngURI?.();
+      if (!dataUrl) throw new Error('3D 画面暂不可用');
+
+      const fileName = exportFileName('png', 'molecule-3d');
+      downloadFile(dataUrl, fileName);
+      onNotice?.({
+        kind: 'success',
+        title: '3D 截图已保存',
+        detail: fileName,
+      });
+    } catch (caught) {
+      console.error('[3D viewer] Screenshot failed', caught);
+      onNotice?.({
+        kind: 'error',
+        title: '3D 截图失败',
+        detail: caught instanceof Error ? caught.message : String(caught),
+      });
+    }
+  }, [onNotice]);
 
   useEffect(() => {
     if (!open) return;
@@ -460,6 +490,7 @@ export function Viewer3DModal({
               dragMode={dragMode}
               onDragModeChange={setDragMode}
               onResetView={handleResetView}
+              onScreenshot={handleScreenshot}
               maximized={maximized}
               onToggleMaximized={() => setMaximized((value) => !value)}
               ready={stage === 'ready'}
