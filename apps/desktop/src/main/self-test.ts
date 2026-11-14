@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 
 /**
  * End-to-end smoke test for the desktop shell, run with `electron . --self-test`.
@@ -68,6 +68,18 @@ interface Viewer3DResult {
   stage: string;
   atomCount?: number;
   detail?: string;
+}
+
+interface LogEntry {
+  id: number;
+  level: string;
+  source: string;
+  message: string;
+  timestamp: number;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -221,6 +233,65 @@ export async function runSelfTest(
         const result = await evaluate<Viewer3DResult>(VIEWER_SCRIPT);
         log(`  viewer: ${JSON.stringify(result)}`);
         return result.stage === 'ready' && (result.atomCount ?? 0) > 0;
+      },
+    },
+    {
+      name: 'renderer console.warn reaches the log buffer',
+      run: async () => {
+        await evaluate(`window.zephyrlea.logs.report('warn', 'self-test 渲染层日志')`);
+        await delay(300);
+        const history = await evaluate<LogEntry[]>(`window.zephyrlea.logs.history()`);
+        const entry = history.find((item) => item.message.includes('self-test 渲染层日志'));
+        log(`  entry: ${JSON.stringify(entry)}`);
+        return entry?.level === 'warn' && entry?.source === 'renderer';
+      },
+    },
+    {
+      name: 'python backend output captured',
+      run: async () => {
+        const history = await evaluate<LogEntry[]>(`window.zephyrlea.logs.history()`);
+        const backendEntries = history.filter((entry) => entry.source === 'backend');
+        const last = backendEntries[backendEntries.length - 1];
+        log(`  backend entries: ${backendEntries.length} · last: ${last?.level} ${last?.message.slice(0, 70)}`);
+        return backendEntries.length > 0;
+      },
+    },
+    {
+      name: 'log window opens once and renders entries',
+      run: async () => {
+        await evaluate(`window.zephyrlea.logs.open()`);
+        await evaluate(`window.zephyrlea.logs.open()`);
+
+        // 第二次调用只应聚焦，不应产生第三个窗口。
+        const deadline = Date.now() + 15_000;
+        let logsWindow = BrowserWindow.getAllWindows().find((win) => win !== window);
+
+        while (!logsWindow && Date.now() < deadline) {
+          await delay(250);
+          logsWindow = BrowserWindow.getAllWindows().find((win) => win !== window);
+        }
+        if (!logsWindow) {
+          log('  log window never appeared');
+          return false;
+        }
+
+        const windowCount = BrowserWindow.getAllWindows().length;
+
+        // 窗口存在不等于页面已渲染完，轮询到列表出现带时间戳的行再判定。
+        const renderDeadline = Date.now() + 15_000;
+        let text = '';
+
+        while (Date.now() < renderDeadline) {
+          text = (await logsWindow.webContents.executeJavaScript(
+            'document.body.innerText',
+          )) as string;
+          if (text.includes('系统日志') && /\d{2}:\d{2}:\d{2}\.\d{3}/.test(text)) break;
+          await delay(250);
+        }
+
+        const hasTimestamp = /\d{2}:\d{2}:\d{2}\.\d{3}/.test(text);
+        log(`  windows: ${windowCount} · rendered: ${hasTimestamp} · head: ${text.slice(0, 60).replace(/\s+/g, ' ')}`);
+        return windowCount === 2 && text.includes('系统日志') && hasTimestamp;
       },
     },
   ];

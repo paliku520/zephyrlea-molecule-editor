@@ -1,12 +1,17 @@
 import { writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron';
-import type { SaveDialogOptions } from 'electron';
+import type { BrowserWindowConstructorOptions, SaveDialogOptions } from 'electron';
 import { LocalBackend } from './backend';
+import { Logger, type LogLevel } from './logger';
 import { runSelfTest } from './self-test';
 
-const backend = new LocalBackend();
+const logger = new Logger();
+const backend = new LocalBackend(logger);
 const SELF_TEST = process.argv.includes('--self-test');
+
+/** Only one system log window is ever open; further requests just focus it. */
+let logsWindow: BrowserWindow | null = null;
 
 const EXTENSION_NAMES: Record<string, string> = {
   png: 'PNG 图片',
@@ -29,12 +34,13 @@ interface SaveResult {
   filePath?: string;
 }
 
-function createWindow(): BrowserWindow {
-  const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 680,
+interface RendererLogReport {
+  level?: unknown;
+  message?: unknown;
+}
+
+function windowOptions(): BrowserWindowConstructorOptions {
+  return {
     backgroundColor: '#151516',
     show: false,
     autoHideMenuBar: true,
@@ -44,6 +50,54 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
     },
+  };
+}
+
+/**
+ * Loads the shared renderer entry. `query` is what splits the molecule editor
+ * and the log console: both come from the same bundle, picked apart in `main.tsx`.
+ */
+function loadRenderer(window: BrowserWindow, query?: Record<string, string>): void {
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
+
+  if (devServerUrl) {
+    const url = new URL(devServerUrl);
+    for (const [key, value] of Object.entries(query ?? {})) url.searchParams.set(key, value);
+    void window.loadURL(url.toString());
+    return;
+  }
+
+  void window.loadFile(join(__dirname, '../renderer/index.html'), { query });
+}
+
+/** Repository / document links belong in the system browser. */
+function openLinksExternally(window: BrowserWindow): void {
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+}
+
+/** Ctrl/Cmd + Shift + L opens the console from any window. */
+function bindLogShortcut(window: BrowserWindow): void {
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+
+    const withModifier = process.platform === 'darwin' ? input.meta : input.control;
+    if (!withModifier || !input.shift || input.key.toLowerCase() !== 'l') return;
+
+    event.preventDefault();
+    openLogsWindow();
+  });
+}
+
+function createMainWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    ...windowOptions(),
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 680,
   });
 
   window.once('ready-to-show', () => window.show());
@@ -54,20 +108,44 @@ function createWindow(): BrowserWindow {
     });
   }
 
-  // Repository / document links belong in the system browser.
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
-    return { action: 'deny' };
-  });
-
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
-  if (devServerUrl) {
-    void window.loadURL(devServerUrl);
-  } else {
-    void window.loadFile(join(__dirname, '../renderer/index.html'));
-  }
+  openLinksExternally(window);
+  bindLogShortcut(window);
+  loadRenderer(window);
+  logger.info('main', '主窗口已创建');
 
   return window;
+}
+
+function openLogsWindow(): void {
+  if (logsWindow && !logsWindow.isDestroyed()) {
+    if (logsWindow.isMinimized()) logsWindow.restore();
+    logsWindow.focus();
+    return;
+  }
+
+  const window = new BrowserWindow({
+    ...windowOptions(),
+    width: 800,
+    height: 600,
+    minWidth: 520,
+    minHeight: 360,
+    title: '系统日志',
+    // 独立的普通窗口：不绑定父窗口、不阻塞主界面，可以自由最大化。
+    modal: false,
+    maximizable: true,
+    minimizable: true,
+  });
+
+  logsWindow = window;
+  window.once('ready-to-show', () => window.show());
+  window.on('closed', () => {
+    if (logsWindow === window) logsWindow = null;
+  });
+
+  openLinksExternally(window);
+  bindLogShortcut(window);
+  loadRenderer(window, { window: 'logs' });
+  logger.info('main', '系统日志窗口已打开');
 }
 
 async function saveFile(owner: BrowserWindow | undefined, request: SaveRequest): Promise<SaveResult> {
@@ -118,18 +196,40 @@ function registerIpc(): void {
     const owner = BrowserWindow.fromWebContents(event.sender);
     return saveFile(owner ?? undefined, request);
   });
+
+  ipcMain.handle('window:open-logs', () => openLogsWindow());
+  ipcMain.handle('logs:history', () => logger.history());
+  ipcMain.handle('logs:clear', () => logger.clear());
+
+  // 渲染层用 send 上报 console.warn / console.error；参数来自页面，先收敛再入库。
+  ipcMain.on('log:report', (_event, report: RendererLogReport) => {
+    const level: LogLevel =
+      report?.level === 'error' || report?.level === 'warn' ? report.level : 'info';
+    logger.log(level, 'renderer', String(report?.message ?? ''));
+  });
 }
 
 app.whenReady().then(() => {
+  logger.info(
+    'main',
+    `应用启动 · Electron ${process.versions.electron} · Chrome ${process.versions.chrome} · ${process.platform}`,
+  );
+
   registerIpc();
-  createWindow();
+  createMainWindow();
 
   // Warm up the Python process while the window paints; failures are reported
   // per request so the UI can show them in its own language.
-  void backend.ensureStarted().catch((error: unknown) => console.error('[backend]', error));
+  void backend
+    .ensureStarted()
+    .then(() => logger.info('main', `本地计算服务已就绪：${backend.url ?? '未知地址'}`))
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('main', `本地计算服务启动失败：${message}`);
+    });
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
 });
 
@@ -137,4 +237,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('will-quit', () => backend.stop());
+app.on('will-quit', () => {
+  logger.info('main', '应用即将退出');
+  backend.stop();
+});
