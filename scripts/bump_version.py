@@ -1,7 +1,7 @@
 ﻿#!/usr/bin/env python3
 """保持整个仓库中的应用版本号同步。
 
-UI 从 ``apps/web/src/lib/version.ts`` 读取版本号，而打包则读取
+UI 从 ``apps/web-local/src/lib/version.ts`` 读取版本号，而打包则读取
 ``apps/desktop/package.json``；此脚本会一次性写入所有位置，
 这样发布时的版本号升级就不会导致它们不同步。
 
@@ -43,13 +43,13 @@ TARGETS = (
         PACKAGE_VERSION,
     ),
     Target(
-        "apps/web/package.json",
-        ROOT / "apps/web/package.json",
+        "apps/web-local/package.json",
+        ROOT / "apps/web-local/package.json",
         PACKAGE_VERSION,
     ),
     Target(
-        "apps/web/src/lib/version.ts",
-        ROOT / "apps/web/src/lib/version.ts",
+        "apps/web-local/src/lib/version.ts",
+        ROOT / "apps/web-local/src/lib/version.ts",
         TS_VERSION,
     ),
 )
