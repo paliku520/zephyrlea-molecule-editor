@@ -6,6 +6,7 @@ import os
 
 import rdkit
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -15,6 +16,16 @@ from . import chem
 class AnalyzeRequest(BaseModel):
     smiles: str = ""
     molfile: str | None = None
+
+
+class StructureRequest(BaseModel):
+    smiles: str = ""
+    molfile: str | None = None
+
+
+def _error(status_code: int, code: str, message: str) -> JSONResponse:
+    """统一的友好错误格式：前端取 error.message 直接显示给用户。"""
+    return JSONResponse({"error": {"code": code, "message": message}}, status_code=status_code)
 
 
 def create_app(token: str | None = None) -> FastAPI:
@@ -34,6 +45,16 @@ def create_app(token: str | None = None) -> FastAPI:
             return JSONResponse({"detail": "invalid token"}, status_code=401)
         return await call_next(request)
 
+    # 纯 Web 调试（`npm run dev:web` + `npm run dev:backend`）时渲染层会直接
+    # 跨端口访问本机服务，因此放行回环来源；Electron 走 IPC，不依赖这条规则。
+    # 放在 token 中间件之后注册，CORS 才是最外层：预检请求不带 token 也能通过。
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["content-type", "x-zephyrlea-token"],
+    )
+
     @app.get("/health")
     def health() -> dict:
         return {
@@ -46,5 +67,24 @@ def create_app(token: str | None = None) -> FastAPI:
     @app.post("/analyze")
     def analyze(body: AnalyzeRequest) -> dict:
         return chem.inspect_structure(body.smiles, body.molfile)
+
+    @app.post("/api/layout2d")
+    def layout_2d(body: StructureRequest):
+        """重新生成 2D 坐标；无法解析时返回友好错误而不是空结构。"""
+        molfile = chem.generate_2d_molblock(body.smiles, body.molfile)
+        if not molfile:
+            return _error(422, "parse_failed", "无法解析该结构，无法生成 2D 坐标；请检查语法后重试。")
+
+        return {"molfile": molfile}
+
+    @app.post("/api/embed3d")
+    def embed_3d(body: StructureRequest):
+        """生成 3D 构象。嵌入失败只是可预期的结果，绝不能让服务端崩溃。"""
+        try:
+            return chem.embed_3d(body.smiles, body.molfile)
+        except chem.ChemError as error:
+            return _error(422, error.code, error.message)
+        except Exception as error:  # noqa: BLE001 - 兜底，避免 500 直接打到界面
+            return _error(500, "internal_error", f"3D 构象生成失败：{error}")
 
     return app
