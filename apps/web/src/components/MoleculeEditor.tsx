@@ -65,6 +65,11 @@ function nextPaint(): Promise<void> {
   });
 }
 
+/** Error text for a toast detail: never the class name prefix. */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** Maps RDKit atom indexes back to the Kekule atoms drawn on the canvas. */
 function buildValidationMarks(
   validation: StructureValidation,
@@ -375,14 +380,24 @@ export function MoleculeEditor() {
       return;
     }
 
-    const loaded = (await bridgeRef.current?.importSmiles(value)) ?? false;
-    if (loaded) {
-      showToast({ kind: 'success', title: 'SMILES 已载入' });
-    } else {
+    try {
+      const loaded = (await bridgeRef.current?.importSmiles(value)) ?? false;
+      if (loaded) {
+        showToast({ kind: 'success', title: 'SMILES 已载入' });
+      } else {
+        showToast({
+          kind: 'error',
+          title: '无法解析 SMILES',
+          detail: '请检查语法后重试，例如 CC(=O)Oc1ccccc1C(=O)O。',
+        });
+      }
+    } catch (error) {
+      // 本地引擎不可用或后端拒绝时，直接显示后端给出的说明
+      console.error('[Kekule] Failed to import SMILES', error);
       showToast({
         kind: 'error',
-        title: '无法解析 SMILES',
-        detail: '请检查语法后重试，例如 CC(=O)Oc1ccccc1C(=O)O。',
+        title: '无法载入 SMILES',
+        detail: errorMessage(error),
       });
     }
   }, [showToast, smilesInput]);
@@ -420,7 +435,7 @@ export function MoleculeEditor() {
       }
     } catch (error) {
       console.error('[Clean Up] Failed', error);
-      showToast({ kind: 'error', title: '整理视图失败', detail: String(error) });
+      showToast({ kind: 'error', title: '整理视图失败', detail: errorMessage(error) });
     } finally {
       relayoutBusyRef.current = false;
       setBusyTask(null);
@@ -449,7 +464,7 @@ export function MoleculeEditor() {
       }
     } catch (error) {
       console.error('[Relayout] Failed', error);
-      showToast({ kind: 'error', title: '整理结构失败', detail: String(error) });
+      showToast({ kind: 'error', title: '整理结构失败', detail: errorMessage(error) });
     } finally {
       relayoutBusyRef.current = false;
       setBusyTask(null);

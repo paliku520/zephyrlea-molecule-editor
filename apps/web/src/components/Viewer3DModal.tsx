@@ -33,9 +33,6 @@ interface Viewer3DModalProps {
 
 type Stage = 'loading' | 'ready' | 'error';
 
-/** Deterministic so the same structure always yields the same conformer. */
-const CONFORMER_SEED = 42;
-
 /** Zoom applied per wheel notch; the reciprocal is used for zooming out. */
 const ZOOM_STEP = 1.12;
 
@@ -308,7 +305,7 @@ export function Viewer3DModal({
 
     void (async () => {
       try {
-        const result = await computeConformer(smiles, CONFORMER_SEED);
+        const result = await computeConformer(smiles);
         if (cancelled) return;
 
         const $3Dmol = await loadThreeDmol();

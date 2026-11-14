@@ -15,9 +15,8 @@ const TECH_STACK: { name: string; role: string }[] = [
   { name: 'Vite', role: '构建与静态部署' },
   { name: 'Tailwind CSS 4', role: '主题与布局' },
   { name: 'Kekule.js 1.0.4', role: '2D 绘图与图片渲染' },
-  { name: 'RDKit.js（WASM）', role: '分子分析与价键校验' },
-  { name: 'OpenChemLib', role: '2D 坐标生成' },
-  { name: 'sci-form-wasm', role: '3D 构象生成' },
+  { name: 'Python · FastAPI', role: '本地计算服务' },
+  { name: 'RDKit（原生）', role: '分子分析、2D 坐标与 3D 构象' },
   { name: '3Dmol.js', role: '三维渲染' },
 ];
 
