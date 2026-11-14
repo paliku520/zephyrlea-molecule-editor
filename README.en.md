@@ -169,4 +169,6 @@ The build output is a static site (`dist/`) with no backend: run `npm run build`
 
 Released under the [MIT License](LICENSE).
 
+Please read the [Disclaimer](DISCLAIMER.md) before use, deployment or redistribution: the project is for education and learning only, any unlawful or dangerous use is prohibited, and deployers are responsible for their own instances and compliance.
+
 Copyright (c) 2026 paliku520 (云野风云ZephyrLea.)

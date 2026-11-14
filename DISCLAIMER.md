@@ -1,0 +1,96 @@
+# 免责声明
+
+> **本项目仅供教学与学习参考。严禁用于任何违法、危险或危害公共安全的用途。**
+>
+> 最后更新：2026-11-14
+
+Zephyrlea 分子结构编辑器（下称「本项目」）是一个面向中学化学教学的开源小分子结构绘制工具。在安装、使用、部署、修改或分发本项目之前，请仔细阅读以下条款。
+
+## 1. 项目定位
+
+- 本项目用于化学结构的绘制、展示、基础分析与三维构象预览，目的是辅助教学演示、自学与个人研究。
+- 本项目不是专业的化学信息学软件，也不构成任何化学、医学、药学、法律或安全建议。
+- 项目作者与贡献者不是使用者所在机构的教师、实验室负责人或安全责任人，不能替代课堂教学、实验规范与专业指导。
+
+## 2. 仅供教学与学习
+
+- 分子分析（RDKit）、结构校验、2D 坐标整理（OpenChemLib）与 3D 构象生成（sci-form-wasm）均由第三方开源库在浏览器本地计算。
+- 所有结果**不保证准确、完整或实时**。3D 构象为算法生成，并非实验测定结果，界面上也已标注「仅供参考」。
+- 不得将本项目的输出作为实验操作、工业生产、医疗诊断、药物研发、合规申报、安全评估或任何专业决策的唯一依据。
+- 涉及真实化学实验时，必须遵守所在学校、实验室与主管部门的安全规范，并由具备资质的人员指导。
+
+## 3. 禁止非法用途
+
+使用者不得利用本项目（包括修改版、衍生版或部署实例）从事或协助以下行为：
+
+- 违反《中华人民共和国刑法》《危险化学品安全管理条例》《易制毒化学品管理条例》等法律法规及所在国家／地区的相关规定；
+- 设计、合成、制造、储存、运输、买卖或使用化学武器、爆炸物、管制毒品与精神药品、易制毒化学品或其他受管制物质；
+- 规避出口管制、制裁、化学品监管、实验室安全审查或内容审核；
+- 故意制作、传播违法或危险信息，或教唆、帮助他人实施上述行为；
+- 以任何方式危害人身安全、公共安全、环境或他人合法权益。
+
+使用者应自行确认其行为合法合规。因违法或不当使用产生的一切后果，由使用者自行承担。
+
+## 4. 部署者与二次分发者的责任
+
+本项目是纯静态前端，可自行构建并部署到任意静态托管服务。部署、托管、修改或分发本项目（下称「部署者」）即表示部署者独立运营该实例，并应：
+
+- 在部署页面显著位置保留本免责声明与开源许可证，或提供清晰可访问的链接；
+- 对部署实例的内容、访问控制、日志、备份、可用性与安全更新负责；
+- 遵守托管平台条款与当地法律要求（例如备案、内容审核、隐私政策、未成年人保护等）；
+- 不得以本项目作者的名义作出担保、背书或误导性宣传；
+- 自行处理因修改代码、配置或运营产生的风险与纠纷。
+
+部署者因部署、运营或二次分发产生的一切责任，均由部署者自行承担，与项目作者及贡献者无关。
+
+## 5. 数据与隐私
+
+- 本项目没有后端服务，绘制内容、界面设置与画板存档仅保存在当前浏览器的 `localStorage` 中（`zephyrlea.board`、`zephyrlea.settings`），不会由本项目主动上传。
+- 托管平台、CDN、反向代理、浏览器扩展等仍可能按照其自身策略收集访问日志或遥测数据，部署者应自行评估并向使用者披露。
+- 请勿在共享或公共设备上保存敏感内容；清除浏览器数据会导致画板与设置丢失。
+- 首次打开时需按需下载约 16 MB 的 WebAssembly（RDKit 与三维构象引擎），下载行为由浏览器与托管服务完成。
+
+## 6. 第三方组件
+
+本项目依赖并受益于 Kekule.js、RDKit、OpenChemLib、3Dmol.js、sci-form-wasm、React 等开源项目，相关版权与许可证归各自作者所有。使用、修改或再分发这些组件时，请遵守其各自的许可证（参见 `package.json` 及对应依赖仓库）。
+
+本项目与上述第三方项目及其维护者之间不存在隶属、赞助或背书关系。第三方组件的缺陷、性能问题或结果偏差，不构成项目作者的保证或责任。
+
+## 7. 无担保
+
+本项目按 **MIT 许可证**以「现状」（AS IS）提供。在适用法律允许的最大范围内，项目作者与贡献者不对本项目作出任何明示或默示的担保，包括但不限于适销性、特定用途适用性、不侵权、准确性、完整性、无中断或无错误。
+
+## 8. 责任限制
+
+在适用法律允许的最大范围内，项目作者与贡献者不对因使用或无法使用本项目而导致的任何直接、间接、附带、特殊、惩罚性或后果性损害承担责任，包括但不限于数据丢失、设备损坏、实验事故、人身伤害、财产损失、环境损害、法律责任或商业损失。
+
+部分司法辖区不允许排除或限制某些责任，此时上述限制应在法律允许的范围内适用。
+
+## 9. 知识产权与侵权处理
+
+- 本项目源代码以 [MIT 许可证](LICENSE) 发布；项目名称、标识与文档内容的版权归作者所有。
+- 如您认为本项目侵犯了您的合法权益，请通过 GitHub Issues 与我们联系，我们会及时核实并处理。
+
+## 10. 声明变更与接受
+
+- 本声明可能随项目发展而更新，更新后的版本自发布之日起生效；请以仓库中的最新版本为准。
+- 使用、复制、修改、部署或分发本项目，即视为您已阅读、理解并同意本声明。如不同意，请立即停止使用。
+
+---
+
+## English Summary
+
+This project is an open-source molecule structure editor intended **for education and learning only**.
+
+- **No warranty**: it is provided "as is" under the MIT License, without warranties of accuracy, fitness or reliability. Analysis and 3D conformers are computed locally by third-party libraries and are for reference only.
+- **No unlawful use**: you must not use this project (or any modified/deployed version) to design, produce, store or distribute chemical weapons, explosives, controlled drugs or precursors, or to violate any applicable law, export control or safety regulation.
+- **Deployer responsibility**: anyone who hosts, modifies or redistributes this project operates their own instance and is solely responsible for its content, access control, privacy notices, legal compliance and security.
+- **Privacy**: there is no backend; drawings and settings are stored in the browser's `localStorage` only.
+- **Limitation of liability**: to the maximum extent permitted by law, the authors and contributors are not liable for any damages arising from the use of this project.
+
+If the Chinese and English versions differ, the Chinese version prevails.
+
+## 联系方式
+
+- 仓库：<https://github.com/paliku520/zephyrlea-molecule-editor>
+- 问题反馈：<https://github.com/paliku520/zephyrlea-molecule-editor/issues>

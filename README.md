@@ -171,4 +171,6 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 
 本项目基于 [MIT 协议](LICENSE) 发布。
 
+使用、部署或分发前，请阅读 [免责声明](DISCLAIMER.md)：本项目仅供教学与学习参考，禁止任何非法或危险用途，部署者需自行承担运营与合规责任。
+
 Copyright (c) 2026 paliku520（云野风云ZephyrLea.）
