@@ -66,7 +66,6 @@
   --shell-glyph-filter: invert(1) brightness(1.5);
 
   /* 系统日志的级别配色：比界面语义色更饱和，方便在一屏文字里快速扫读 */
-  --log-info: #7cc0ff;
   --log-warn: #ffc046;
   --log-error: #ff6b6b;
   --log-info-badge: #1d6fe0;
@@ -74,6 +73,11 @@
   --log-error-badge: #dc2626;
   --log-error-badge-ink: #ffffff;
   --log-warn-badge-ink: #1a1204;
+
+  /* 日志来源标签：低饱和专属色，只用文字着色 */
+  --log-source-main: #b49cf0;
+  --log-source-python: #6dc8bd;
+  --log-source-web: #9ccf7a;
 }
 
 [data-theme="light"] {
@@ -106,8 +110,7 @@
   --shell-scrollbar-thumb: rgba(17, 24, 39, 0.22);
   --shell-glyph-filter: none;
 
-  /* 浅色主题下把文字压深，色块（badge）仍是高饱和底 + 白字 */
-  --log-info: #1a5fd0;
+  /* 浅色主题下把警告/错误的文字压深，色块（badge）仍是高饱和底 + 白字 */
   --log-warn: #9a5b00;
   --log-error: #c62828;
   --log-info-badge: #1d6fe0;
@@ -115,6 +118,10 @@
   --log-error-badge: #dc2626;
   --log-error-badge-ink: #ffffff;
   --log-warn-badge-ink: #1a1204;
+
+  --log-source-main: #6b52c9;
+  --log-source-python: #0f766e;
+  --log-source-web: #4a7c2f;
 }
 
 html,

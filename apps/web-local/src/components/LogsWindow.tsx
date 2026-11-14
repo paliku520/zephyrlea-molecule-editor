@@ -22,9 +22,9 @@ const FILTER_ACTIVE: Record<LevelFilter, string> = {
   error: 'bg-[var(--log-error-badge)] text-[var(--log-error-badge-ink)]',
 };
 
-/** 级别配色取自 index.css 里的 --log-* 变量：文字用高饱和前景，badge 用实色底。 */
+/** 级别配色取自 index.css 里的 --log-* 变量：INFO 用正文灰白，WARN / ERROR 才染文字色。 */
 const LEVEL_TEXT: Record<LogLevel, string> = {
-  info: 'text-[var(--log-info)]',
+  info: 'text-ink-soft',
   warn: 'text-[var(--log-warn)]',
   error: 'text-[var(--log-error)]',
 };
@@ -46,6 +46,13 @@ const SOURCE_LABEL: Record<string, string> = {
   main: 'MAIN',
   backend: 'PYTHON',
   renderer: 'WEB',
+};
+
+/** 来源标签只染文字、不加底色，用来区分主进程 / Python 后端 / 渲染层。 */
+const SOURCE_TEXT: Record<string, string> = {
+  main: 'text-[var(--log-source-main)]',
+  backend: 'text-[var(--log-source-python)]',
+  renderer: 'text-[var(--log-source-web)]',
 };
 
 const pad = (value: number, length = 2) => String(value).padStart(length, '0');
@@ -231,7 +238,9 @@ export function LogsWindow() {
                 >
                   {entry.level.toUpperCase()}
                 </span>
-                <span className="w-[48px] shrink-0 text-[10px] font-semibold tracking-wide text-ink-muted">
+                <span
+                  className={`w-[48px] shrink-0 text-[10px] font-semibold tracking-wide ${SOURCE_TEXT[entry.source] ?? 'text-ink-muted'}`}
+                >
                   {SOURCE_LABEL[entry.source] ?? entry.source.toUpperCase()}
                 </span>
                 <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${LEVEL_TEXT[entry.level]}`}>
