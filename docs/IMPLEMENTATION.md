@@ -1,0 +1,102 @@
+# 实现要点
+
+本文件收录目录结构与实现细节，供二次开发参考。本项目文档只提供中文版本。
+
+## 目录结构
+
+```text
+public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
+src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
+src/components/AppHeader.tsx  页眉：标题、关于入口与 GitHub 仓库跳转
+src/components/AboutModal.tsx 关于弹窗：简介、技术栈、MIT 协议全文与作者（`LICENSE?raw` 内联）
+src/components/icons/       自定义 SVG 化学图标
+src/lib/editorBridge.ts     Kekule Composer 生命周期、工具切换、SMILES 读写、自适应视图
+src/lib/editorBoard.ts      绘制面尺寸、无限平移（内容重定位）与缩放后的重新居中
+src/lib/kekuleSpace.ts      Kekule 化学空间查询工具（分子、包围盒、滚动容器、坐标比例）
+src/lib/kekuleBondStyle.ts  化学键线宽 / 双键间距 / 环内双键朝向的渲染补丁
+src/lib/kekuleElectronLabel.ts  把电荷 / 自由基并入原子标签的渲染补丁（离子显示）
+src/lib/kekuleNodeSetter.ts  R 基团的双击标签编辑（SubGroup 注册到原子编辑器）、仅原子选择面板与自绘周期表的接管
+src/lib/periodicTable.ts    元素周期表的符号表与标准长式布局（118 种元素）
+src/components/PeriodicTableModal.tsx  自绘元素周期表弹窗（元素条与双击标签框共用）
+src/lib/elementColors.ts    深色 / 浅色两套元素配色（界面与画布共用）
+src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
+src/lib/site.ts             页眉与关于弹窗共用的仓库链接、文档入口
+src/lib/boardPersistence.ts 画板自动保存 / 恢复（结构 molblock、原子坐标、缩放与视口位置）
+src/lib/rdkit.ts            RDKit WASM 加载、分子式 / 描述符分析、化学问题检测与开发模式自检入口
+src/lib/structureValidation.ts  分析 + 校验结果模型、价键错误归类与中文说明
+src/lib/conformer3d.ts      sci-form-wasm 引擎加载、3D 构象生成与 molblock 序列化
+src/components/SettingsModal.tsx  设置弹窗（主题切换、3D 模型样式、隐藏碳/氢原子）
+src/components/Model3DSwitch.tsx  3D 模型样式选择器（图标按钮，设置弹窗用）
+src/components/Viewer3DToolbar.tsx  3D 窗口底部工具栏（模型样式 + 拖拽方式 + 重置视图 + 最大化）
+src/components/ui/IconRadioGroup.tsx  图标单选组与边框容器（两处 3D 设置共用）
+src/components/Viewer3DModal.tsx  3D 视图弹窗（3Dmol.js 球棍 / 空间填充 / 棍状 / 线框渲染）
+src/components/AnalysisPanel.tsx  右侧「分子分析」面板（可折叠卡片 + 结构校验）
+src/components/ValidationOverlay.tsx  画布上标记问题原子的红圈层
+src/lib/moleculeLayout.ts   无坐标结构的纯 JS 兜底布局算法
+src/lib/moleculeExport.ts   画板导出：测量墨水包围盒、Kekule → SVG、再栅格化为 2× 透明 PNG
+src/lib/download.ts         浏览器下载与导出文件名工具
+src/types/svgcanvas.d.ts    svgcanvas 的最小类型声明
+src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
+```
+
+## 关于 Kekule.js
+
+- Kekule 使用官方 npm `dist` 包（`kekule.min.js` 1.0.4）的本地副本加载，而非实时 CDN，因此编辑器可离线使用，且版本固定。
+- Kekule 1.0.4 的编辑器默认通过 **Canvas2D** 渲染桥绘制（也可使用 Raphael/SVG，但那不是编辑器的默认路径）。为了线条平滑，这里开启了渲染器的 `antialias` 与 2 倍 `overSamplingRatio`，并将 `bondLineWidth` 设为 1.5。
+- 原生 Kekule 界面通过两层方式移除：清空 Composer 的工具按钮数组，并用 CSS 隐藏顶部/左侧/底部区域与高级面板。
+- 两套主题由 `<html data-theme="dark|light">` 驱动一套 `--shell-*` CSS 变量，`src/index.css` 用 `@theme inline` 把它们映射成 Tailwind 颜色（`bg-panel`、`text-ink`、`border-line`…），因此切换主题不需要改任何组件代码。`index.html` 在首屏渲染前读取 `localStorage` 设置，避免闪白。
+- 主题切换时 `editorBridge.applySettings()` 会重写 Kekule 的渲染配置（原子/键/字形颜色、元素调色板、选中标记色）并重绘；碳/氢的显示则由 `defMoleculeDisplayType`（`SKELETAL` / `CONDENSED`）与 `defHydrogenDisplayLevel`（`DEFAULT` / `ALL`）控制。
+- Kekule 的 `BaseEditorIaController` 会在任何工具下响应双击、弹出内联的原子/标签编辑器。这里覆写该方法，只在 `SelectIaController`（选择 / 套索）下放行，其它工具的双击保留给工具本身（例如连点加电荷）。
+- Kekule 自带的 CPK 调色板是为白底设计的（碳为纯黑、氮为深蓝），这里替换成暗色专用调色板（见 `src/lib/elementColors.ts`）。另外 Kekule 以整行行高居中原子标签，大写字母会因此偏上、与化学键端点错开，所以把文本绘制位置下移 0.15em（`src/lib/kekuleLabelStyle.ts`）。
+- Kekule 会把形式电荷/自由基画成独立的 `ChemMarker` 对象、停在原子四周「最空」的方向，同时让未标注的碳不显示元素符号——于是阳离子只剩下一个悬空的「+」。`src/lib/kekuleElectronLabel.ts` 关闭这种自动生成的标记，把电荷/自由基并入原子标签作为上标（氢写在电荷之前，显示 `CH₃⁺` 而不是 `C⁺H₃`），对带电原子强制绘制并水平排布标签，并屏蔽已经由标签表达的标记，避免重复绘制。
+- 启动和清空画布时，视图居中于绘制面；同时自动扩大绘制面以覆盖整个视口，保证任意方向都能平移，不会卡在边缘。窗口尺寸变化时保留当前滚动位置。
+- R 基团在 Kekule 里是 `Kekule.SubGroup`（`RGroup` 只是它的别名），它有两个副作用：面板注册表里**没有**它的双击编辑器（双击无反应），而绘制 `SubGroup` 时只要被「展开」就会因为内部没有原子而完全不可见。`src/lib/kekuleNodeSetter.ts` 把原子的内联编辑器注册给 `SubGroup`，并把输入框的值（`R`、`R1`…）改写回 `abbr`，因此 R 基团既可双击改名，也可输入元素符号就地替换；`editorBridge.ts` 的 `expandCollapsedGroups()` 只展开**含有原子**的 `SubGroup`（预置缩写基团），R 基团保持收起状态才会画出 `R` 标签。双击面板中的预置取代基模板（`Ph`、`NO2`…）已移除，元素与 R 基团之外一律自行绘制。
+- 双击面板的「…」（更多）按钮原本会弹出 Kekule 自带的周期表窗口，那套窗口不跟随应用的深色 / 浅色主题。`installPeriodicTablePicker()` 覆写 `StructureNodeSelectPanel._openPeriodicTableDialog`：普通元素选择改由 React 的自绘周期表接管（`PeriodicTableModal`），选中后仍走 Kekule 的 `doValueChanged()`，与原生流程一样落到 `applySetter`，因此就地替换、撤销都可以正常工作；只有「变量原子列表」（`isVarList` / `isVarNotList`）需要多选，继续沿用原生窗口。React 侧通过 `EditorBridgeCallbacks.onRequestElementPick` 拿到请求，没有监听者时自动回退原生窗口。
+- 「无限画布」：绘制面本身按视口的 4 倍展开（不小于 2600 渲染像素，单边最多 4608 渲染像素，避免多层 canvas 占用过多内存）。当平移靠近绘制面边界时，会把整幅结构整体挪回中央，并同步补偿滚动量，所以画面看起来完全不动，但可以一直朝任意方向平移；移动范围由结构本身兜底，结构永远不会被画到画布之外（多余空间会先自动扩大绘制面，达到上限后平移停在该方向）。
+- 缩放、双击缩放或手势缩放后，会把结构重新放回绘制面中央（同样补偿滚动），因此在任何缩放级别都能向上下左右继续平移。绘制面尺寸始终跟随缩放级别调整，既不会越界，也不会随缩放无限膨胀。
+- 缩放上下限写在 `src/lib/editorBoard.ts`（`MIN_ZOOM` / `MAX_ZOOM`），通过对 `editor.zoomTo` 的包装统一钳制，因此按钮、滚轮、手势、双击与程序化适配（整理 / 适应画布）都走同一套边界。
+- 编辑器的 `change` 事件用于驱动 React 侧的「空画布提示」，Kekule 不管理宿主容器之外的任何 DOM。
+- 图片导出没有走「截屏」：`src/lib/moleculeExport.ts` 用 `ChemObjPainter2D` + `CanvasRendererBridge` 把整个 `ChemSpace` 根节点重新绘制一遍。先在临时画布上按 1× 渲染并扫描 alpha 得到真实墨水包围盒（Kekule 对 `ChemSpace` 根节点算不出 container box，因此边界由各分子的 `getContainerBox` 求并集给出，仅用于给测量画布定尺寸），再按同一偏移把绘制重放到裁好的画布上。SVG 借助 `svgcanvas` 把 Canvas2D 调用转译为 `<path>` / `<text>`；PNG 则由这份 SVG 以 2× 栅格化，两种格式因此完全一致。
+
+## 关于画板持久化
+
+- 存档写在 `localStorage` 的 `zephyrlea.board` 下（`src/lib/boardPersistence.ts`），与设置项（`zephyrlea.settings`）分开。内容变化、缩放、页面隐藏（`pagehide` / `visibilitychange`）或编辑器销毁时都会写入；编辑过程中防抖 600ms，避免每画一笔就序列化一次。
+- 每个结构保存为 **V2000 molblock**（`Kekule.IO.saveFormatData(mol, 'mol')`），另外附上每个原子的**绝对坐标**：molblock 只保留原子间的相对位置，而编辑器移动的是整个结构（`_shiftChemSpaceChildCoord` 改的是结构自身坐标），两者结合才能在恢复后保住结构之间的相对排布。恢复时用 `K.IO.loadFormatData` 解析 molblock，把结构自身偏移归零后写回原子坐标，再追加到化学空间。
+- 视图保存的是**视口中心相对结构包围盒中心的偏移量**，而不是绝对坐标：编辑器布局时会整体挪动结构（重新居中、扩大绘制面），绝对坐标会随之失效，相对偏移则不受影响。恢复时先还原缩放，再按当前包围盒算出目标中心，并在 140 / 400 / 800ms 后重复校正——Kekule 会在布局结束后异步重置滚动位置。
+- 载入结构时 Kekule 会按该结构的键长自动缩放绘制面（`objScreenLengthRatio` = `defAutoScaleRefLength` / `defBondLength`）。只恢复结构会退回默认比例，画面比刷新前放大约 1.9 倍，因此存档里同时记下这两个数值，恢复时写回并重新计算绘制面尺寸。
+- 恢复发生在首帧布局（`composer.resized()`）之后：先追加结构、再恢复比例与缩放、最后校正视口；没有存档时仍走原来的空画布居中逻辑。
+
+## 关于 RDKit 分析与校验
+
+- 分析引擎是 `@rdkit/rdkit`（RDKit MinimalLib 的 WebAssembly 构建，7.4 MB）。wasm 通过 `import wasmUrl from '@rdkit/rdkit/RDKit_minimal.wasm?url'` 交给 Vite 打包，并在 `locateFile` 中指回该地址，因此开发与生产构建都能离线运行。
+- 分子式取自 `mol.get_json()`：JSON 只写出与默认值不同的字段（默认 `z: 6` / `impHs: 0` / `chg: 0`），所以按「元素符号 + 隐式氢」累加后按 **Hill 顺序**（先 C、再 H、其余按字母序；没有碳时全部按字母序）拼成 `C9H8O4` 这样的字符串，净电荷单独相加后作为徽标显示。
+- 其余数字全部来自 `mol.get_descriptors()`（`amw`、`exactmw`、`NumHeavyAtoms`、`NumAtoms`、`NumRings`、`NumAromaticRings`、`NumRotatableBonds`、`NumHBD`、`NumHBA`、`tpsa`、`CrippenClogP`），本构建没有单独的分子式 API。
+- 分析与校验合并成一次 `inspectStructure()`：先在 `sanitize: false` 的对象上找价键问题，再用默认（开启 sanitize）的对象取分子式与描述符——无法 sanitize 的结构没有可靠的分子式，卡片显示「结构 N 无法解析」。两次载入与校验共用同一条 Promise 队列。
+- 卡片折叠状态由面板本身持有（按结构序号），重新编辑结构、甚至把整块面板收起成窄条再展开，卡片都保持原来的折叠状态；画布清空后这份记录随之重置。
+- 面板高度被钳制在画布行内（`min-h-0` 链 + 面板内部滚动），结构再多也只在面板里滚动，不会把底部的元素条 / 工具栏 / 操作栏挤出窗口。
+- 结构先用 `RDKit.get_mol(smiles, JSON.stringify({ sanitize: false }))` 载入：开启 sanitize 时 RDKit 会直接拒绝非法结构并返回 `null`，拿不到可检查的对象。SMILES 解析失败时退回 molblock 再试一次。
+- `@rdkit/rdkit` 2026.9.2 的类型定义（`dist/RDKit_minimal.d.ts`）与 wasm 绑定中**没有** `detect_chemistry_problems`（`Mol` 原型上没有该方法，wasm 里也没有该符号）。因此这里改用 `RDKit.set_log_capture('rdApp.error')` 捕获 sanitizer 输出的原始异常文本（`Explicit valence for atom # 0 C, 5, is greater than permitted`），再归类为 `AtomValenceException`；如果将来的版本提供了该方法，代码会优先调用 `mol.detect_chemistry_problems()`。
+- 问题原子的定位使用同一结构的 **molblock**（`Kekule.IO.saveFormatData(mol, 'mol')`）：Kekule 写出的 molblock 原子顺序与画布节点顺序一致，RDKit 报错里的原子序号可以直接映射到画布节点；而 SMILES 是按遍历顺序写出的，序号与节点顺序不同，无法用来定位。
+- 每次校验都在 `finally` 中调用 `mol.delete()`（包括临时用来触发 sanitize 的对象），避免 WASM 堆内存泄漏；多次校验通过一条 Promise 队列串行执行，避免日志捕获互相干扰。
+- 校验在编辑事件的下一帧之后再防抖 220ms 触发；`editorBridge` 的 `onContentChange` 会带上递增的 `revision`，React 侧据此决定是否重跑 RDKit。
+- 红圈是一层 `pointer-events-none` 的 SVG 覆盖层，逐帧读取 `editor.objCoordToScreen()`，因此缩放、平移、整理、拖动原子时都会跟随；圆圈半径按相邻键长的一半缩放。
+- 开发模式下可在浏览器控制台调用 `__zephyrleaDetectChemistryProblems({ smiles, molfile })`，或 `__zephyrleaRunDetectionSelfTest()`（用 `C` 与 `C(C)(C)(C)(C)(C)` 打印检测结果）来复现检测逻辑。
+
+## 关于 3D 视图
+
+- 3D 构象由 `sci-form-wasm` 在浏览器内计算（不访问 PubChem 等外部接口）：先 `await init()` 初始化 WASM 模块，再 `JSON.parse(embed(smiles, 42))` 拿到 `{ num_atoms, coords, elements, bonds }`。`elements` 是原子序数数组，`coords` 是扁平化的 `x,y,z` 序列，`bonds` 是 `[起, 止, "SINGLE" | "DOUBLE" | "TRIPLE" | "AROMATIC"]` 三元组。
+- `embed()` 一次只处理**一个**结构：传入 `c1ccccc1.C1CCCC1` 时只返回后者的坐标。所以多个结构会先按 `.` 拆开（`splitComponents`），逐个 `embed()` 后再合并：每个片段按包围盒沿 x 轴依次摆开（间距 4 Å、y/z 居中），最后整体居中，键的原子索引加上片段偏移，合成一个 molblock 交给 3Dmol，因此多结构画布在 3D 里能看到全部结构。
+- 结果被拼成 **V2000 molblock**（保留键级），交给 `viewer.addModel(molblock, 'sdf')`。只用 XYZ 的话格式里没有键信息，3Dmol 只能按距离猜键、并全部画成单键；molblock 带上了键级，3Dmol 就会自己把双键 / 三键画成两条 / 三条平行圆柱，芳香键则画成「实线 + 环内虚线」的大 π 键（`aromaticStyle: 'dashed'`，即默认样式）。
+- 渲染样式由 `MODEL_STYLE_SPECS` 决定，分四种：**球棍**（`stick` + `sphere: { scale: 0.3 }`，默认）、**空间填充**（仅 `sphere: { scale: 1 }`，按范德华半径铺满）、**棍状**（仅 `stick`）、**线框**（半径 0.05 的细棍）。球棍与棍状用的是半径 0.15 的细棍（3Dmol 默认 0.25），单键更轻；同时把多重键比例提高到 `doubleBondScaling: 0.55` / `tripleBondScaling: 0.45`，细棍下双键 / 三键仍清晰可辨。线框没有用 3Dmol 的 `line` 样式，是因为 WebGL 的 `lineWidth` 在主流浏览器上被限制为 1px，在暗色背景上几乎看不见。
+- 切换样式只调用 `viewer.setStyle()` 再重新适配视图，不会重建模型，所以当前旋转角度保持不变；重新适配（`zoomTo()` + 空间填充时额外拉远 25%）是为了让更大的球体仍留在画面内。样式存在 `settings.model3DStyle`（`localStorage`），设置弹窗与 3D 窗口底部工具栏共用同一份 `Model3DSwitch` 选项定义，两处改动互相同步。
+- 底部工具栏把模型样式、拖拽方式、重置视图、最大化放在同一个药丸形容器里（`pointer-events-none` 的外层负责定位，内层恢复交互），对齐方式由 `settings.viewer3DToolbarAlign` 决定：`justify-start` / `justify-center` / `justify-end`，默认居中。提示文字因此移到画布左上角，避免与靠左的工具栏重叠。
+- **拖拽方式**是两个互斥的图标按钮：`旋转结构`（默认，直接使用 3Dmol 的拖拽旋转）与 `移动摄像头`。后者在画布上盖一层透明层接管指针事件（避免 3Dmol 同时旋转），拖动时调用 `viewer.translate(dx, -dy)` —— 它移动的是相机 `lookingAt`，结构本身不动，所以看起来是「绕着结构平移视角」。3Dmol 的 `translate` 以画布中心为原点、y 轴朝上，因此纵向要取反，拖动方向才与手势一致。
+- 滚轮缩放在两种拖拽方式下统一由容器上的原生 `wheel` 监听（捕获阶段 + `stopPropagation`，避免与 3Dmol 自带的滚轮缩放叠加）处理，并且**以鼠标位置为锚点**：先 `viewer.zoom(factor)`，再按 `-(factor-1)·指针偏移` 平移相机，使指针下的原子保持在指针下，因此缩放既能放大也能缩小，而且作用在注视的位置而不是只朝画布中心缩放。
+- 重置视图不是 3Dmol 自带的 API：它把 `setView()` 的平移归零、旋转四元数设为单位四元数（`[0,0,0,z,0,0,0,1]`），再把相机 `lookingAt` 指回原点（`setView()` 不会撤销「移动摄像头」造成的相机偏移），最后按当前样式重新 `zoomTo()`，所以「重置」后的画面与刚打开弹窗时完全一致。
+- 最大化只是切换弹窗容器尺寸（`h-full w-full max-w-none` + 外层内边距 `p-2`），canvas 由 `ResizeObserver` 触发 `viewer.resize()` 重排，模型不被重建；`Esc` 在最大化时只还原窗口，再按一次才关闭。
+- `sci-form-wasm` 的 `exports` 只暴露了 `.`、`./alpha`、`./beta`，wasm 二进制无法用子路径导入。`vite.config.ts` 里把 `sci-form-wasm/wasm` 别名到真实的 `sci_form_wasm_bg.wasm`，代码再用 `import wasmUrl from 'sci-form-wasm/wasm?url'` 取得资源地址并显式传给 `init({ module_or_path })`，开发与生产构建行为一致。
+- `embed()` 是同步 WASM 调用，会阻塞主线程；调用前先让出一帧（`requestAnimationFrame`），保证弹窗先画出「正在计算 3D 构象…」的加载态。
+- 3Dmol（约 570 KB）通过动态 `import('3dmol')` 懒加载，不进首屏包。它本身是 webpack 的 UMD 产物，导入时对 `default` 与命名空间两种互操作形态都做了兼容。
+- 关闭弹窗（或切换结构、点重试）时执行 `viewer.clear()` 并移除 canvas，viewer 引用置空，因此重复开关不会累积 canvas，也不会因为 WebGL 上下文过多而被浏览器回收。
+- `smiles`、`theme` 与 `modelStyle` 的处理方式不同：`smiles` 变化会重建模型，主题变化只调用一次 `setBackgroundColor()`，样式变化只调用 `setStyle()`，因此切换主题或显示方式都不会丢掉用户已经拖好的视角。
+

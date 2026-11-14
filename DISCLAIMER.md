@@ -68,7 +68,7 @@ Zephyrlea 分子结构编辑器（下称「本项目」）是一个面向中学�
 
 ## 9. 知识产权与侵权处理
 
-- 本项目源代码以 [MIT 许可证](LICENSE) 发布；项目名称、标识与文档内容的版权归作者所有。
+- 本项目源代码以 [MIT 许可证](LICENSE) 发布；请在使用、修改或分发时遵守 MIT 许可证的相关条款。
 - 如您认为本项目侵犯了您的合法权益，请通过 GitHub Issues 与我们联系，我们会及时核实并处理。
 
 ## 10. 声明变更与接受
@@ -77,18 +77,6 @@ Zephyrlea 分子结构编辑器（下称「本项目」）是一个面向中学�
 - 使用、复制、修改、部署或分发本项目，即视为您已阅读、理解并同意本声明。如不同意，请立即停止使用。
 
 ---
-
-## English Summary
-
-This project is an open-source molecule structure editor intended **for education and learning only**.
-
-- **No warranty**: it is provided "as is" under the MIT License, without warranties of accuracy, fitness or reliability. Analysis and 3D conformers are computed locally by third-party libraries and are for reference only.
-- **No unlawful use**: you must not use this project (or any modified/deployed version) to design, produce, store or distribute chemical weapons, explosives, controlled drugs or precursors, or to violate any applicable law, export control or safety regulation.
-- **Deployer responsibility**: anyone who hosts, modifies or redistributes this project operates their own instance and is solely responsible for its content, access control, privacy notices, legal compliance and security.
-- **Privacy**: there is no backend; drawings and settings are stored in the browser's `localStorage` only.
-- **Limitation of liability**: to the maximum extent permitted by law, the authors and contributors are not liable for any damages arising from the use of this project.
-
-If the Chinese and English versions differ, the Chinese version prevails.
 
 ## 联系方式
 
