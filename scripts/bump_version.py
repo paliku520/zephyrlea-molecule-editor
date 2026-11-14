@@ -1,16 +1,16 @@
 ﻿#!/usr/bin/env python3
-"""Keep the app version in sync across the repo.
+"""保持整个仓库中的应用版本号同步。
 
-The UI reads the version from ``apps/web/src/lib/version.ts`` while packaging
-reads ``apps/desktop/package.json``; this script writes every location at once
-so a release bump never leaves them out of step.
+UI 从 ``apps/web/src/lib/version.ts`` 读取版本号，而打包则读取
+``apps/desktop/package.json``；此脚本会一次性写入所有位置，
+这样发布时的版本号升级就不会导致它们不同步。
 
-Usage::
+用法::
 
-    python scripts/bump_version.py                 # show current versions
-    python scripts/bump_version.py 0.2.0           # set an explicit version
+    python scripts/bump_version.py                 # 显示当前版本号
+    python scripts/bump_version.py 0.2.0           # 设置一个明确的版本号
     python scripts/bump_version.py --bump minor    # 0.1.0 -> 0.2.0
-    python scripts/bump_version.py --check         # exit 1 when out of sync
+    python scripts/bump_version.py --check         # 当版本号不同步时以退出码 1 退出
 """
 
 from __future__ import annotations
