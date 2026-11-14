@@ -10,13 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@rdkit/rdkit": "^2026.9.2",
     "3dmol": "^2.5.5",
     "lucide-react": "^1.70.0",
-    "openchemlib": "^9.25.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "sci-form-wasm": "^1.0.0",
     "svgcanvas": "^2.6.0"
   },
   "devDependencies": {
