@@ -13,8 +13,9 @@ apps/backend/main.py        本地计算服务入口（FastAPI + 原生 RDKit）
 apps/backend/zephyrlea_backend/chem.py    结构分析 / 2D 布局 / 3D 构象
 apps/backend/zephyrlea_backend/app.py     HTTP 路由、token 校验与 CORS
 apps/backend/requirements.txt              Python 依赖（rdkit / fastapi / uvicorn）
-apps/desktop/src/main/index.ts            Electron 主进程：窗口、IPC、原生另存
-apps/desktop/src/main/backend.ts          Python 子进程生命周期与 HTTP 客户端
+apps/desktop/src/main/index.ts            Electron 主进程：窗口、日志窗口、IPC、原生另存
+apps/desktop/src/main/logger.ts           日志中心：环形缓冲 + 向所有窗口广播
+apps/desktop/src/main/backend.ts          Python 子进程生命周期、日志转发与 HTTP 客户端
 apps/desktop/src/main/self-test.ts        `--self-test` 端到端冒烟
 apps/desktop/src/preload/index.ts         contextBridge：window.zephyrlea
 apps/desktop/electron.vite.config.ts      主进程 / preload / 渲染层（root 指向 apps/web-local）
@@ -22,6 +23,8 @@ apps/web-local/vite.shared.ts                   两个构建共用的插件与�
 apps/web-local/src/lib/desktop.ts               桌面桥接口与探测
 apps/web-local/src/lib/chemistryTypes.ts        分析 / 2D / 3D 的数据契约（桥与后端共用）
 apps/web-local/src/lib/chemistryBackend.ts      唯一的化学计算入口（本地服务，无 WASM 兜底）
+apps/web-local/src/lib/consoleLogs.ts           console.warn / error 转发到系统日志
+apps/web-local/src/components/LogsWindow.tsx    日志控制台窗口（?window=logs）
 apps/web-local/public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
 src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
 src/components/AppHeader.tsx  页眉：标题、关于入口与 GitHub 仓库跳转
@@ -127,6 +130,18 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 临时目录与产物都写进 `.gitignore`，因此跑完之后 `git status` 依旧干净；`finally` 里无条件清理，构建中途失败也不会留下 worktree，脚本兜底再清一次并返回非零退出码。
 - 实测产物 19.77 MB，含 `RDKit_minimal.wasm` 与 `sci_form_wasm_bg.wasm`；用 `python -m http.server` 直接托管 `dist-static/` 可以正常载入、分析阿司匹林（`C9H8O4`）且控制台无报错，可直接作为 Cloudflare Pages 的输出目录。
 - 改用 `npm ci` 的原因：tag 自带 `package-lock.json`，可复现依赖版本；`npm install` 会把 lockfile 重写一遍，产物可能漂移。
+
+## 关于系统日志
+
+- 日志只有一个中心：主进程的 `logger.ts`。它维护一个最多 1000 条的环形缓冲，每条记录带自增 `id`、`level`、`source`、`message`、`timestamp`，写入后立刻向**所有**窗口广播 `log:received`；后打开的窗口用 `logs:history()` 补齐历史，靠 `id` 去重合并，因此不会漏掉窗口创建之前的记录。
+- 三个来源：
+  - **Python 后端**：`main.py` 的 `_configure_logging()` 把 `uvicorn.access` 接到 stdout、`uvicorn.error` 接到 stderr（`propagate = False`，`log_config=None`，避免与 uvicorn 默认配置叠加）。主进程用 `forwardLines()` 按行切分两个流（半行不会漏），`classifyLevel()` 再按内容把 `ERROR` / `Traceback` 判成 error、`WARN` 判成 warn。启动握手行 `ZEPHYRLEA_BACKEND_READY <port>` 不重复入日志，改由主进程记录「本地计算服务已就绪：<url>」。
+  - **Electron 主进程**：应用启动、主窗口创建、后端启动 / 就绪 / 退出（非 0 退出码记为 error）、日志窗口打开等。
+  - **渲染层**：`consoleLogs.ts` 包装 `console.warn` / `console.error`，原样调用后再经 `log:report` 上报；同时监听 `error` 与 `unhandledrejection`。参数先格式化成字符串（`Error` 取 stack、对象用 JSON.stringify 兜底）并截断，避免一条日志把窗口撑爆。
+- 窗口：`window:open-logs` → `openLogsWindow()`，800×600、`minWidth 520`、可最大化、非 modal；已存在时只做 `restore()` + `focus()`，不会重复创建。`Ctrl/⌘ + Shift + L` 通过 `before-input-event` 绑定在每个窗口上（不进系统全局快捷键，避免影响其它应用）。
+- 页面：日志窗口与主界面是同一份产物，`main.tsx` 用 `?window=logs` 分流到 `LogsWindow`；开发态由主进程在 `ELECTRON_RENDERER_URL` 上追加查询参数，打包态则用 `loadFile(..., { query })`。
+- 性能：渲染层同样把上限压在 1000 条（`appendEntries()` 合并去重、按 id 排序、超出从头部截断），自动滚动用 `useLayoutEffect` 在同一帧跳到最新一条；实测推入 1205 条后 DOM 里正好 1000 行，关闭自动滚动后 `scrollTop` 保持在原位。
+- 冒烟测试覆盖：`logs.report` 的 warn 能进入缓冲、后端输出被采集、连续两次打开日志窗口只产生一个窗口且列表渲染出带时间戳的行。
 
 ## 关于 3D 视图
 
