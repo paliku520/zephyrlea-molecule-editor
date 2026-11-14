@@ -8,17 +8,18 @@
 
 ```text
 apps/backend/main.py        本地计算服务入口（FastAPI + 原生 RDKit）
-apps/backend/zephyrlea_backend/chem.py    结构分析：公式 / 描述符 / 价键问题
-apps/backend/zephyrlea_backend/app.py     HTTP 路由与 token 校验
+apps/backend/zephyrlea_backend/chem.py    结构分析 / 2D 布局 / 3D 构象
+apps/backend/zephyrlea_backend/app.py     HTTP 路由、token 校验与 CORS
 apps/backend/requirements.txt              Python 依赖（rdkit / fastapi / uvicorn）
 apps/desktop/src/main/index.ts            Electron 主进程：窗口、IPC、原生另存
 apps/desktop/src/main/backend.ts          Python 子进程生命周期与 HTTP 客户端
 apps/desktop/src/main/self-test.ts        `--self-test` 端到端冒烟
 apps/desktop/src/preload/index.ts         contextBridge：window.zephyrlea
 apps/desktop/electron.vite.config.ts      主进程 / preload / 渲染层（root 指向 apps/web）
-apps/web/vite.shared.ts                   两个构建共用的插件与 wasm alias
+apps/web/vite.shared.ts                   两个构建共用的插件与静默日志
 apps/web/src/lib/desktop.ts               桌面桥接口与探测
-apps/web/src/lib/chemistryBackend.ts      分析后端分发（本地服务 / WASM）
+apps/web/src/lib/chemistryTypes.ts        分析 / 2D / 3D 的数据契约（桥与后端共用）
+apps/web/src/lib/chemistryBackend.ts      唯一的化学计算入口（本地服务，无 WASM 兜底）
 apps/web/public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
 src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
 src/components/AppHeader.tsx  页眉：标题、关于入口与 GitHub 仓库跳转
@@ -37,9 +38,8 @@ src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
 src/lib/site.ts             页眉与关于弹窗共用的仓库链接、文档与免责声明入口
 src/lib/version.ts          版本号唯一来源（页眉徽标、关于弹窗、浏览器标题共用）
 src/lib/boardPersistence.ts 画板自动保存 / 恢复（结构 molblock、原子坐标、缩放与视口位置）
-src/lib/rdkit.ts            RDKit WASM 加载、分子式 / 描述符分析、化学问题检测与开发模式自检入口
 src/lib/structureValidation.ts  分析 + 校验结果模型、价键错误归类与中文说明
-src/lib/conformer3d.ts      sci-form-wasm 引擎加载、3D 构象生成与 molblock 序列化
+src/lib/conformer3d.ts      3D 构象（向本地后端请求，多结构已由后端排好）
 src/components/SettingsModal.tsx  设置弹窗（主题切换、3D 模型样式、隐藏碳/氢原子）
 src/components/Model3DSwitch.tsx  3D 模型样式选择器（图标按钮，设置弹窗用）
 src/components/Viewer3DToolbar.tsx  3D 窗口底部工具栏（模型样式 + 拖拽方式 + 重置视图 + 最大化）
@@ -83,41 +83,45 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 
 ## 关于 RDKit 分析与校验
 
-- 分析后端有两套实现，由 `src/lib/chemistryBackend.ts` 按运行环境分发：浏览器版走 `@rdkit/rdkit`（RDKit MinimalLib 的 WebAssembly 构建，7.4 MB），桌面版走本地 Python 服务（原生 RDKit）。两条路径返回同一份 `StructureInspection`（`problems` + `info`），面板与 `structureValidation.ts` 无需感知差异。
-- 桌面版不会加载 RDKit 的 wasm：`prepareAnalysisEngine()` 在有 preload 桥时改为调用 `window.zephyrlea.backend.health()`，等 Python 服务就绪即把引擎状态置为 ready；`--self-test` 会断言分析过程没有发出 `RDKit_minimal` 请求。
-- `apps/backend/zephyrlea_backend/chem.py` 刻意复刻 MinimalLib 的语义，保证两版数字完全一致：分子式按 `get_json()` 的「元素符号 + 隐式氢」规则拼 Hill 顺序；`heavyAtoms` 对应 `NumHeavyAtoms`，`totalAtoms` 对应把隐式氢也算进去的 `NumAtoms`（所以乙醇是 3 / 9）；描述符分别取 `Descriptors.MolWt`、`ExactMolWt`、`rdMolDescriptors.CalcNum*`、`CalcTPSA`、`Crippen.MolLogP`。
-- 价键问题不再靠抓 sanitizer 日志：Python 侧直接调用 `Chem.DetectChemistryProblems()`，把 `AtomValenceException` 的原子序号、元素符号与显式价态填进同名字段。解析时 `removeHs=False` 且优先用 molblock，这样报告里的 `atomIndex` 与编辑器节点顺序一致，红圈能落在正确的原子上。
-- 浏览器版的细节：wasm 通过 `import wasmUrl from '@rdkit/rdkit/RDKit_minimal.wasm?url'` 交给 Vite 打包，并在 `locateFile` 中指回该地址，因此开发与生产构建都能离线运行。分子式取自 `mol.get_json()`，其余数字全部来自 `mol.get_descriptors()`；本构建没有单独的分子式 API。
-- 分析与校验合并成一次 `inspectStructure()`：先在 `sanitize: false` 的对象上找价键问题，再用默认（开启 sanitize）的对象取分子式与描述符——无法 sanitize 的结构没有可靠的分子式，卡片显示「结构 N 无法解析」。两次载入与校验共用同一条 Promise 队列。
+- 化学计算只有一个来源：本地 Python 服务（原生 RDKit）。`src/lib/chemistryBackend.ts` 是唯一的入口，`prepareAnalysisEngine()` 启动时确认服务就绪，`inspectStructure()` 取回 `problems` + `info`；面板与 `structureValidation.ts` 只认这一份 `StructureInspection`。
+- `apps/backend/zephyrlea_backend/chem.py` 的字段语义沿用过去 MinimalLib 版本的口径：分子式按「元素符号 + 隐式氢」拼 Hill 顺序；`heavyAtoms` 取 `CalcNumHeavyAtoms`，`totalAtoms` 取把隐式氢也算进去的 `GetNumAtoms(onlyExplicit=False)`（所以乙醇是 3 / 9）；描述符分别取 `Descriptors.MolWt`、`ExactMolWt`、`rdMolDescriptors.CalcNum*`、`CalcTPSA`、`Crippen.MolLogP`。
+- 价键问题用 `Chem.DetectChemistryProblems()`：把 `AtomValenceException` 的原子序号、元素符号与显式价态填进同名字段。解析时 `removeHs=False` 且优先用 molblock，这样报告里的 `atomIndex` 与编辑器节点顺序一致，红圈能落在正确的原子上。
+- 分析与校验合并成一次请求 `/analyze`：Python 侧先用 `sanitize=False` 的对象找价键问题，再用默认（开启 sanitize）的对象取分子式与描述符——无法 sanitize 的结构没有可靠的分子式，卡片显示「结构 N 无法解析」。
 - 卡片折叠状态由面板本身持有（按结构序号），重新编辑结构、甚至把整块面板收起成窄条再展开，卡片都保持原来的折叠状态；画布清空后这份记录随之重置。
 - 面板高度被钳制在画布行内（`min-h-0` 链 + 面板内部滚动），结构再多也只在面板里滚动，不会把底部的元素条 / 工具栏 / 操作栏挤出窗口。
-- 结构先用 `RDKit.get_mol(smiles, JSON.stringify({ sanitize: false }))` 载入：开启 sanitize 时 RDKit 会直接拒绝非法结构并返回 `null`，拿不到可检查的对象。SMILES 解析失败时退回 molblock 再试一次。（以下三条为浏览器版实现；桌面版改由 Python 侧 `Chem.DetectChemistryProblems()` 完成同样的判断。）
-- `@rdkit/rdkit` 2026.9.2 的类型定义（`dist/RDKit_minimal.d.ts`）与 wasm 绑定中**没有** `detect_chemistry_problems`（`Mol` 原型上没有该方法，wasm 里也没有该符号）。因此这里改用 `RDKit.set_log_capture('rdApp.error')` 捕获 sanitizer 输出的原始异常文本（`Explicit valence for atom # 0 C, 5, is greater than permitted`），再归类为 `AtomValenceException`；如果将来的版本提供了该方法，代码会优先调用 `mol.detect_chemistry_problems()`。
 - 问题原子的定位使用同一结构的 **molblock**（`Kekule.IO.saveFormatData(mol, 'mol')`）：Kekule 写出的 molblock 原子顺序与画布节点顺序一致，RDKit 报错里的原子序号可以直接映射到画布节点；而 SMILES 是按遍历顺序写出的，序号与节点顺序不同，无法用来定位。
-- 每次校验都在 `finally` 中调用 `mol.delete()`（包括临时用来触发 sanitize 的对象），避免 WASM 堆内存泄漏；多次校验通过一条 Promise 队列串行执行，避免日志捕获互相干扰。
-- 校验在编辑事件的下一帧之后再防抖 220ms 触发；`editorBridge` 的 `onContentChange` 会带上递增的 `revision`，React 侧据此决定是否重跑 RDKit。
+- 校验在编辑事件的下一帧之后再防抖 220ms 触发；`editorBridge` 的 `onContentChange` 会带上递增的 `revision`，React 侧据此决定是否重跑分析。
 - 红圈是一层 `pointer-events-none` 的 SVG 覆盖层，逐帧读取 `editor.objCoordToScreen()`，因此缩放、平移、整理、拖动原子时都会跟随；圆圈半径按相邻键长的一半缩放。
-- 开发模式下可在浏览器控制台调用 `__zephyrleaDetectChemistryProblems({ smiles, molfile })`，或 `__zephyrleaRunDetectionSelfTest()`（用 `C` 与 `C(C)(C)(C)(C)(C)` 打印检测结果）来复现检测逻辑。
+- 前端不再打包任何分析引擎：连不上本地服务时 `prepareAnalysisEngine()` 抛 `LocalEngineUnavailableError`，分析面板改为「本地计算服务不可用 / 未连接本地计算引擎，请确保软件已正确安装运行」并提供重新加载按钮。
 
 ## 关于桌面外壳与本地服务
 
-- 渲染层只有一份：`apps/desktop/electron.vite.config.ts` 把 renderer 的 `root` 指向 `apps/web`，并把 `index.html` 显式列为入口（electron-vite 默认只在 `<package>/index.html` 或 `src/renderer` 里找），因此 `npm run dev:web` 与 `npm run dev:desktop` 跑的是同一套源码。共用插件与 wasm alias 放在 `apps/web/vite.shared.ts`，两个配置各自引用，避免分叉。
+- 渲染层只有一份：`apps/desktop/electron.vite.config.ts` 把 renderer 的 `root` 指向 `apps/web`，并把 `index.html` 显式列为入口（electron-vite 默认只在 `<package>/index.html` 或 `src/renderer` 里找），因此 `npm run dev:web` 与 `npm run dev:desktop` 跑的是同一套源码。共用插件放在 `apps/web/vite.shared.ts`，两个配置各自引用，避免分叉；electron-vite 默认不压缩 renderer，这里显式打开 `minify`，让打包体积与 Web 构建一致。
 - 主进程用 `process.env.ELECTRON_RENDERER_URL` 判断开发 / 生产：前者 `loadURL` 指向 electron-vite 的开发服务器，后者 `loadFile('out/renderer/index.html')`。外部链接一律交给系统浏览器（`setWindowOpenHandler`），窗口开启 `contextIsolation` 与 `sandbox`，不开放 `nodeIntegration`。
 - Python 服务由 `LocalBackend` 拉起：`apps/backend/main.py` 先自己 `bind` 一个端口（默认 `--port 0` 交给系统分配），在 stdout 打印唯一一行 `ZEPHYRLEA_BACKEND_READY <port>`，主进程解析这一行拿到端口，再用 `/health` 轮询到就绪。异常退出会把 `starting` 清空，下次调用会重新拉起。
 - 认证用的 token 由主进程用 `randomBytes` 生成，通过环境变量 `ZEPHYRLEA_BACKEND_TOKEN` 传给子进程；服务端中间件校验 `x-zephyrlea-token`，缺失或不匹配一律 401。服务只监听 `127.0.0.1`，不暴露文档路由（`docs_url` / `openapi_url` 均为 `None`）。
 - 子进程的 stdin 由主进程持有，并传 `--watch-stdin`：stdin 一旦关闭（Electron 退出、崩溃），服务立即 `os._exit(0)`，不会留下孤儿进程；`will-quit` 时也会主动结束子进程。
-- IPC 只有三条：`chemistry:analyze`（转发到 `/analyze`）、`backend:health`（转发到 `/health`）、`file:save`（原生另存）。渲染层通过 preload 暴露的 `window.zephyrlea` 调用，浏览器版没有该对象，`chemistryBackend.ts` 据此退回 WASM 实现。
+- IPC 共五条：`chemistry:analyze`（→ `/analyze`）、`chemistry:layout2d`（→ `/api/layout2d`）、`chemistry:embed3d`（→ `/api/embed3d`，超时放宽到 120s）、`backend:health`（→ `/health`）、`file:save`（原生另存）。渲染层通过 preload 暴露的 `window.zephyrlea` 调用；没有该对象时只能用 `window.__zephyrleaBackendUrl` / `VITE_ZEPHYRLEA_BACKEND` 指定的 HTTP 地址，两者都没有就统一报「未连接本地计算引擎」。
 - 导出改为原生对话框：`saveExportedFile()` 在有桥时把 Blob 转成 `ArrayBuffer`、把 `data:` URL 解码成字节后经 `file:save` 交给主进程写盘，用户取消返回 `false`，界面不再提示「已导出」；浏览器版仍然走 `<a download>`。
-- `apps/desktop/src/main/self-test.ts` 提供 `electron . --self-test`（`npm run smoke:desktop`）：依次断言 preload 已注入、`/health` 经 IPC 连通、五价碳能返回 `AtomValenceException`、界面载入 `CCO` 后显示 `C2H6O` 且**没有**请求 `RDKit_minimal.wasm`，全过退出码 0，便于 CI 把关。
+- `apps/desktop/src/main/self-test.ts` 提供 `electron . --self-test`（`npm run smoke:desktop`）：依次断言 preload 已注入、`/health` 经 IPC 连通、五价碳能返回 `AtomValenceException`、`layout2d` 返回 13 个原子的 V2000 molblock、`embed3d` 双结构返回 9 原子 / 2 片段且 z 方向有展开、非法结构给出中文提示、界面载入 `CCO` 后显示 `C2H6O` 并完成「整理结构」且**没有**请求 `RDKit_minimal.wasm` / `openchemlib` 代码块、3D 弹窗能用后端构象渲染出模型，全过退出码 0，便于 CI 把关。
 - 打包路径已按「先 PyInstaller、再安装包」预留：`app.isPackaged` 时主进程从 `process.resourcesPath/backend/zephyrlea-backend.exe` 启动服务，开发期则用 `apps/backend/.venv/Scripts/python.exe`，也可用 `ZEPHYRLEA_PYTHON` 指定解释器。
 - Electron 固定 `31.7.7`：44 / 45 在这台 Windows 10 上启动即崩（`0xC0000005`），31.7.7 正常。electron-vite 需要在**仓库根**解析 `electron/package.json`（monorepo 下它按自身路径 `require.resolve`），所以 `electron` 声明在根 `package.json` 的 `devDependencies`，`allowScripts` 放行其 postinstall 以取得二进制。
-- 本轮只迁移了「分子分析 / 结构校验」；3D 构象（`sci-form-wasm`）与 SMILES→2D 坐标（OpenChemLib）仍在渲染层计算，后续再按同一模式接入 Python（RDKit ETKDG）与 C++ 扩展。
+- 本轮迁移了「分子分析 / 结构校验 / 2D 坐标生成 / 3D 构象生成」四条链路，并删除了前端全部 WASM 引擎；C++ 扩展与 PyInstaller 打包仍待后续。
+
+## 关于 2D 布局与 3D 构象
+
+- 两者都走 `apps/web/src/lib/chemistryBackend.ts`：存在 Electron preload 桥时经 IPC，否则用探测到的 HTTP 地址；**没有任何 WASM 兜底**。探测不到时抛 `LocalEngineUnavailableError`（文案见上），由各处的 catch 直接显示。
+- 2D：`chem.generate_2d_molblock()` 解析结构（molblock 优先，保证原子顺序与编辑器节点一致）→ **清空所有原子坐标并删除构象** → `rdDepictor.Compute2DCoords()` → `Chem.WedgeMolBonds()` 补手性楔形键 → `MolToMolBlock()`。清坐标这一步不能省：编辑器传来的 molblock 一定带着当前画面的坐标，RDKit 在已有坐标时可能沿用它们，算出来的布局会歪。
+- 2D 回填：`editorBridge.relayout()` 与 `importSmiles()` 只请求本地 molblock；`applyCleanedLayout()` 把新结构按原键长缩放、按原重心对齐后逐个原子写回 Kekule 节点，原子数量或元素顺序对不上时视为失败，退回纯 JS 的 `layoutMolecule()`（整理结构按钮不会因此失效）。
+- 3D：`chem.embed_3d()` 解析 → 清坐标 → `AddHs()` → `EmbedMolecule(randomSeed=42)`；失败时用 `useRandomCoords=True, maxAttempts=50` 再试一次 → `MMFFOptimizeMolecule(maxIters=500)`（缺 MMFF 参数时退回 UFF，两者都没有参数就直接用嵌入坐标）→ `RemoveHs()` → 多片段沿 x 轴排开（间距 4 Å、整体居中）→ `MolToMolBlock()`。
+- 嵌入失败（`EmbedMolecule` 返回 -1，例如 `C1CC2CC3CC4CC5CC1C2C3C45` 这类高张力笼状结构）不会让服务崩溃：`chem.ChemError` 携带 `code` + 中文说明，接口返回 422 `{"error": {"code", "message"}}`，主进程解析出 `error.message` 抛给渲染层，`chemistryBackend` 再剥掉 Electron 的 `Error invoking remote method '…'` 前缀，3D 弹窗直接显示这句话。
+- 接口：`POST /api/layout2d` → `{"molfile": "…"}`（解析失败返回 422）；`POST /api/embed3d` → `{"sdf": "…", "atomCount", "bondCount", "fragmentCount", "elapsedMs"}`（多返回的计数直接用于 3D 窗口标题，省一次解析）。
+- 浏览器直连本地服务调试时，在页面里设置 `window.__zephyrleaBackendUrl = 'http://127.0.0.1:8765'`（或构建期 `VITE_ZEPHYRLEA_BACKEND`），探测到 `/health` 可用后缓存结果；后端因此加了只放行 `localhost` / `127.0.0.1` 来源的 CORS 规则。Electron 走 IPC，不需要这条规则。
+- 移除前后构建体积（`apps/desktop/out/renderer`，本机实测）：27.72 MB → 3.66 MB，其中 `sci_form_wasm_bg*.wasm`（12.6 MB）、`RDKit_minimal.wasm`（7.2 MB）与 `openchemlib` 代码块（1.37 MB）全部消失。
 
 ## 关于 3D 视图
 
-- 3D 构象由 `sci-form-wasm` 在浏览器内计算（不访问 PubChem 等外部接口）：先 `await init()` 初始化 WASM 模块，再 `JSON.parse(embed(smiles, 42))` 拿到 `{ num_atoms, coords, elements, bonds }`。`elements` 是原子序数数组，`coords` 是扁平化的 `x,y,z` 序列，`bonds` 是 `[起, 止, "SINGLE" | "DOUBLE" | "TRIPLE" | "AROMATIC"]` 三元组。
-- `embed()` 一次只处理**一个**结构：传入 `c1ccccc1.C1CCCC1` 时只返回后者的坐标。所以多个结构会先按 `.` 拆开（`splitComponents`），逐个 `embed()` 后再合并：每个片段按包围盒沿 x 轴依次摆开（间距 4 Å、y/z 居中），最后整体居中，键的原子索引加上片段偏移，合成一个 molblock 交给 3Dmol，因此多结构画布在 3D 里能看到全部结构。
-- 结果被拼成 **V2000 molblock**（保留键级），交给 `viewer.addModel(molblock, 'sdf')`。只用 XYZ 的话格式里没有键信息，3Dmol 只能按距离猜键、并全部画成单键；molblock 带上了键级，3Dmol 就会自己把双键 / 三键画成两条 / 三条平行圆柱，芳香键则画成「实线 + 环内虚线」的大 π 键（`aromaticStyle: 'dashed'`，即默认样式）。
+- 3D 构象由 `POST /api/embed3d` 返回的 **V2000 molblock** 直接交给 `viewer.addModel(molblock, 'sdf')`。只用 XYZ 的话格式里没有键信息，3Dmol 只能按距离猜键、并全部画成单键；molblock 带上了键级，3Dmol 就会自己把双键 / 三键画成两条 / 三条平行圆柱，芳香键则画成「实线 + 环内虚线」的大 π 键（`aromaticStyle: 'dashed'`，即默认样式）。多结构的画布由后端拆开、逐个嵌入再沿 x 轴排开，渲染层只负责画一个已经合并好的模型。
 - 渲染样式由 `MODEL_STYLE_SPECS` 决定，分四种：**球棍**（`stick` + `sphere: { scale: 0.3 }`，默认）、**空间填充**（仅 `sphere: { scale: 1 }`，按范德华半径铺满）、**棍状**（仅 `stick`）、**线框**（半径 0.05 的细棍）。球棍与棍状用的是半径 0.15 的细棍（3Dmol 默认 0.25），单键更轻；同时把多重键比例提高到 `doubleBondScaling: 0.55` / `tripleBondScaling: 0.45`，细棍下双键 / 三键仍清晰可辨。线框没有用 3Dmol 的 `line` 样式，是因为 WebGL 的 `lineWidth` 在主流浏览器上被限制为 1px，在暗色背景上几乎看不见。
 - 切换样式只调用 `viewer.setStyle()` 再重新适配视图，不会重建模型，所以当前旋转角度保持不变；重新适配（`zoomTo()` + 空间填充时额外拉远 25%）是为了让更大的球体仍留在画面内。样式存在 `settings.model3DStyle`（`localStorage`），设置弹窗与 3D 窗口底部工具栏共用同一份 `Model3DSwitch` 选项定义，两处改动互相同步。
 - 底部工具栏把模型样式、拖拽方式、重置视图、最大化放在同一个药丸形容器里（`pointer-events-none` 的外层负责定位，内层恢复交互），对齐方式由 `settings.viewer3DToolbarAlign` 决定：`justify-start` / `justify-center` / `justify-end`，默认居中。提示文字因此移到画布左上角，避免与靠左的工具栏重叠。
@@ -125,8 +129,6 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 滚轮缩放在两种拖拽方式下统一由容器上的原生 `wheel` 监听（捕获阶段 + `stopPropagation`，避免与 3Dmol 自带的滚轮缩放叠加）处理，并且**以鼠标位置为锚点**：先 `viewer.zoom(factor)`，再按 `-(factor-1)·指针偏移` 平移相机，使指针下的原子保持在指针下，因此缩放既能放大也能缩小，而且作用在注视的位置而不是只朝画布中心缩放。
 - 重置视图不是 3Dmol 自带的 API：它把 `setView()` 的平移归零、旋转四元数设为单位四元数（`[0,0,0,z,0,0,0,1]`），再把相机 `lookingAt` 指回原点（`setView()` 不会撤销「移动摄像头」造成的相机偏移），最后按当前样式重新 `zoomTo()`，所以「重置」后的画面与刚打开弹窗时完全一致。
 - 最大化只是切换弹窗容器尺寸（`h-full w-full max-w-none` + 外层内边距 `p-2`），canvas 由 `ResizeObserver` 触发 `viewer.resize()` 重排，模型不被重建；`Esc` 在最大化时只还原窗口，再按一次才关闭。
-- `sci-form-wasm` 的 `exports` 只暴露了 `.`、`./alpha`、`./beta`，wasm 二进制无法用子路径导入。`vite.config.ts` 里把 `sci-form-wasm/wasm` 别名到真实的 `sci_form_wasm_bg.wasm`，代码再用 `import wasmUrl from 'sci-form-wasm/wasm?url'` 取得资源地址并显式传给 `init({ module_or_path })`，开发与生产构建行为一致。
-- `embed()` 是同步 WASM 调用，会阻塞主线程；调用前先让出一帧（`requestAnimationFrame`），保证弹窗先画出「正在计算 3D 构象…」的加载态。
 - 3Dmol（约 570 KB）通过动态 `import('3dmol')` 懒加载，不进首屏包。它本身是 webpack 的 UMD 产物，导入时对 `default` 与命名空间两种互操作形态都做了兼容。
 - 关闭弹窗（或切换结构、点重试）时执行 `viewer.clear()` 并移除 canvas，viewer 引用置空，因此重复开关不会累积 canvas，也不会因为 WebGL 上下文过多而被浏览器回收。
 - `smiles`、`theme` 与 `modelStyle` 的处理方式不同：`smiles` 变化会重建模型，主题变化只调用一次 `setBackgroundColor()`，样式变化只调用 `setStyle()`，因此切换主题或显示方式都不会丢掉用户已经拖好的视角。
