@@ -100,9 +100,9 @@ npm run build:web:static
 # 结果在 dist-static/，临时 worktree 会自动清理
 ```
 
-脚本做的事：确认 `v0.1.0` 存在 → `git worktree add .temp-static v0.1.0` → 在临时目录 `npm ci && npm run build` → 把产物复制到 `dist-static/` → 删除临时 worktree。`.temp-static/` 与 `dist-static/` 都已加入 `.gitignore`。
+脚本做的事：确认 `v0.1.0` 存在（本地缺失时先 `git fetch` 该 tag；CI 浅克隆取不到时退回直接浅克隆该 tag）→ 检出到 `.temp-static/` → 在临时目录 `npm ci && npm run build` → 把产物复制到 `dist-static/` → 删除临时目录。`.temp-static/` 与 `dist-static/` 都已加入 `.gitignore`。
 
-- **Cloudflare Pages**：构建命令 `npm run build:web:static`，输出目录 `dist-static`。
+- **Cloudflare Pages**：构建命令 `npm run build:web:static`，输出目录 `dist-static`。Cloudflare 的克隆是浅克隆、不带 tag，脚本会自行从远端把 `v0.1.0` 取回来，无需额外配置，但构建环境需要能访问 GitHub。
 - **Vercel / Netlify**：同上，或用 `v0.1.0` tag 直接构建（命令 `npm run build`，输出 `dist`）。
 - **GitHub Pages**：项目站点挂在 `/<仓库名>/` 下，构建要带路径：`npm run build -- --base=/zephyrlea-molecule-editor/`（自定义域名或用户主页站点用默认的 `--base=/`）。
 - **自建服务器**：`npm run build -- --base=/molecule/`，把产物放进对应子目录，并让 `.wasm` 以 `application/wasm` 返回、开启 gzip / Brotli。

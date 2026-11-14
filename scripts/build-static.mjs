@@ -51,6 +51,23 @@ function git(args, options = {}) {
   return spawnSync('git', args, { cwd: root, encoding: 'utf8', ...options });
 }
 
+function hasTag() {
+  return git(['rev-parse', '--verify', '--quiet', `refs/tags/${STATIC_TAG}`]).status === 0;
+}
+
+/** First line of a failed git invocation, so CI logs stay readable. */
+function gitError(result) {
+  if (result.error) return result.error.message;
+  const text = (result.stderr || result.stdout || '').trim();
+  return text ? text.split('\n')[0] : `git 退出码 ${result.status}`;
+}
+
+function originUrl() {
+  const result = git(['config', '--get', 'remote.origin.url']);
+  const url = result.status === 0 ? (result.stdout || '').trim() : '';
+  return url || null;
+}
+
 function removeWorktree() {
   // `--force` matters: the worktree contains node_modules / dist after a build.
   git(['worktree', 'remove', WORKTREE_DIR, '--force']);
@@ -59,9 +76,18 @@ function removeWorktree() {
 }
 
 function main() {
-  const tag = git(['rev-parse', '--verify', `refs/tags/${STATIC_TAG}`]);
-  if (tag.status !== 0) {
-    fail(`找不到 tag ${STATIC_TAG}，无法构建纯静态版本。请先 \`git fetch --tags\`。`);
+  // CI clones are shallow and carry no refs/tags, so the tag is republished here.
+  if (!hasTag()) {
+    log(`本地没有 ${STATIC_TAG}，尝试从 origin 获取（浅克隆不会带 tag）…`);
+    const fetched = git([
+      'fetch',
+      '--depth',
+      '1',
+      'origin',
+      `+refs/tags/${STATIC_TAG}:refs/tags/${STATIC_TAG}`,
+    ]);
+    if (hasTag()) log(`已获取 tag ${STATIC_TAG}`);
+    else log(`获取 tag 失败：${gitError(fetched)}`);
   }
 
   // A leftover worktree would make `worktree add` fail; drop it and start clean.
@@ -74,8 +100,25 @@ function main() {
     rmSync(outputPath, { recursive: true, force: true });
   }
 
-  log(`检出 ${STATIC_TAG} 到 ${WORKTREE_DIR}/`);
-  run('git', ['worktree', 'add', '--detach', WORKTREE_DIR, STATIC_TAG], root);
+  if (hasTag()) {
+    log(`检出 ${STATIC_TAG} 到 ${WORKTREE_DIR}/`);
+    run('git', ['worktree', 'add', '--detach', WORKTREE_DIR, STATIC_TAG], root);
+  } else {
+    // Last resort: clone only that tag. Needs network access but no local history,
+    // which is exactly the situation on a CI builder.
+    const url = originUrl();
+    if (!url) {
+      fail(
+        `找不到 tag ${STATIC_TAG}，也无法读取 origin 地址；请在完整仓库中执行 \`git fetch --tags\` 后重试。`,
+      );
+    }
+    log(`直接从远端克隆 ${STATIC_TAG} 到 ${WORKTREE_DIR}/`);
+    run(
+      'git',
+      ['clone', '--depth', '1', '--single-branch', '--branch', STATIC_TAG, url, WORKTREE_DIR],
+      root,
+    );
+  }
 
   try {
     // npm ci needs the tag's own lockfile; fall back to install if it is missing.

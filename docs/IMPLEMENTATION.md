@@ -127,6 +127,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 ## 关于纯静态版与 Cloudflare Pages
 
 - `main` 上的渲染层没有化学引擎，所以对外的静态站点仍由 `v0.1.0` tag 提供。`scripts/build-static.mjs`（`npm run build:web:static`）把这件事固化成一条命令：校验 tag 存在 → `git worktree add --detach .temp-static v0.1.0` → 在临时目录里 `npm ci`（没有锁文件时退回 `npm install`）→ `npm run build` → 复制 `dist/` 到根目录 `dist-static/` → `git worktree remove .temp-static --force` 并 `prune`。
+- CI（如 Cloudflare Pages）的克隆是浅克隆、只带目标 commit 而不带 `refs/tags`，所以脚本在找不到 tag 时会先 `git fetch --depth 1 origin +refs/tags/v0.1.0:refs/tags/v0.1.0` 把它取回；若这一步失败（没有 origin 或网络不通），再退回 `git clone --depth 1 --single-branch --branch v0.1.0 <origin> .temp-static` 直接浅克隆该 tag，因此云端构建无需手工 `git fetch --tags`。
 - 临时目录与产物都写进 `.gitignore`，因此跑完之后 `git status` 依旧干净；`finally` 里无条件清理，构建中途失败也不会留下 worktree，脚本兜底再清一次并返回非零退出码。
 - 实测产物 19.77 MB，含 `RDKit_minimal.wasm` 与 `sci_form_wasm_bg.wasm`；用 `python -m http.server` 直接托管 `dist-static/` 可以正常载入、分析阿司匹林（`C9H8O4`）且控制台无报错，可直接作为 Cloudflare Pages 的输出目录。
 - 改用 `npm ci` 的原因：tag 自带 `package-lock.json`，可复现依赖版本；`npm install` 会把 lockfile 重写一遍，产物可能漂移。
