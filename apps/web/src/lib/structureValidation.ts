@@ -1,4 +1,4 @@
-import { inspectStructure, type MoleculeInfo, type RDKitProblem } from './rdkit';
+import { inspectStructure, type MoleculeInfo, type RDKitProblem } from './chemistryBackend';
 
 /** One molecule on the canvas, ready to be handed to RDKit. */
 export interface ValidationTarget {

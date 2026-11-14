@@ -18,8 +18,8 @@ import {
   type SelectionSnapshot,
   type ToolId,
 } from '../lib/editorBridge';
-import { loadRDKit } from '../lib/rdkit';
-import { downloadFile } from '../lib/download';
+import { prepareAnalysisEngine } from '../lib/chemistryBackend';
+import { saveExportedFile } from '../lib/download';
 import { applyThemeToDocument, loadSettings, saveSettings, type AppSettings } from '../lib/settings';
 import {
   validateStructure,
@@ -237,13 +237,13 @@ export function MoleculeEditor() {
     setEngine('loading');
     setEngineError(null);
 
-    loadRDKit()
+    prepareAnalysisEngine()
       .then(() => {
         if (!cancelled) setEngine('ready');
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        console.error('[RDKit] Failed to load', error);
+        console.error('[Analysis] Failed to prepare the chemistry engine', error);
         setEngine('error');
         setEngineError(error instanceof Error ? error.message : String(error));
       });
@@ -505,7 +505,12 @@ export function MoleculeEditor() {
           return;
         }
 
-        downloadFile(image.blob, image.fileName);
+        const saved = await saveExportedFile(image.blob, image.fileName);
+        if (!saved) {
+          showToast({ kind: 'info', title: `已取消导出 ${label} 图片` });
+          return;
+        }
+
         showToast(
           {
             kind: 'success',

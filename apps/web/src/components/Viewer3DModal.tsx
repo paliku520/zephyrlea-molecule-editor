@@ -8,7 +8,7 @@ import {
 import { AlertTriangle, Box, RotateCcw, X } from 'lucide-react';
 import type { AtomStyleSpec, GLViewer } from '3dmol';
 import { computeConformer, type Conformer3D } from '../lib/conformer3d';
-import { downloadFile, exportFileName } from '../lib/download';
+import { exportFileName, saveExportedFile } from '../lib/download';
 import type {
   Model3DStyle,
   ThemeMode,
@@ -251,7 +251,7 @@ export function Viewer3DModal({
     resetView(viewer, modelStyleRef.current);
   }, []);
 
-  const handleScreenshot = useCallback(() => {
+  const handleScreenshot = useCallback(async () => {
     const viewer = viewerRef.current as (GLViewer & { pngURI?: () => string }) | null;
     if (!viewer) return;
 
@@ -261,7 +261,9 @@ export function Viewer3DModal({
       if (!dataUrl) throw new Error('3D 画面暂不可用');
 
       const fileName = exportFileName('png', 'molecule-3d');
-      downloadFile(dataUrl, fileName);
+      const saved = await saveExportedFile(dataUrl, fileName);
+      if (!saved) return;
+
       onNotice?.({
         kind: 'success',
         title: '3D 截图已保存',

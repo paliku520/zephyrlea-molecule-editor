@@ -8,7 +8,15 @@
 
 ## 快速开始
 
-仓库采用 npm workspaces 单仓结构：Web 端在 `apps/web/`，本地后端占位在 `apps/backend/`。
+仓库采用 npm workspaces 单仓结构：
+
+| 目录 | 说明 |
+| --- | --- |
+| `apps/web/` | React + Vite 前端，浏览器版用 RDKit WASM 做分析 |
+| `apps/desktop/` | Electron 外壳，复用 `apps/web` 的渲染层，分析改由本地 Python 服务计算 |
+| `apps/backend/` | Python（FastAPI + 原生 RDKit）本地计算服务 |
+
+浏览器版：
 
 ```bash
 npm install
@@ -21,6 +29,35 @@ npm run dev:web
 npm run build:web
 npm run preview --workspace=apps/web
 ```
+
+### 桌面版（Electron）
+
+首次运行前准备 Python 环境（Windows）：
+
+```bash
+python -m venv apps/backend/.venv
+apps/backend/.venv/Scripts/python.exe -m pip install -r apps/backend/requirements.txt
+```
+
+然后启动或构建：
+
+```bash
+npm run dev:desktop     # 开发模式，窗口 + 本地计算服务热更新
+npm run build:desktop   # 构建到 apps/desktop/out
+npm run smoke:desktop   # 端到端冒烟：preload → IPC → Python → 分析面板
+```
+
+桌面版在启动时会自动拉起 `apps/backend/main.py`（随机端口 + 每次启动生成的一次性 token，只监听 `127.0.0.1`），窗口关闭时一并退出。需要指定其他解释器时设置环境变量 `ZEPHYRLEA_PYTHON`。图片导出改为系统「另存为」对话框，由主进程直接写盘。
+
+发版时用脚本统一改版本号（同时写入 `apps/desktop/package.json`、`apps/web/package.json` 与 `apps/web/src/lib/version.ts`）：
+
+```bash
+python scripts/bump_version.py 0.2.0      # 指定版本
+python scripts/bump_version.py --bump patch   # 0.1.0 -> 0.1.1
+python scripts/bump_version.py --check    # 版本不一致时退出码 1
+```
+
+> Electron 固定为 `31.7.7`：更新的主版本在这台 Windows 10 上启动即崩溃，`31.7.7` 已验证可用。electron 的二进制由 postinstall 下载，仓库根 `package.json` 的 `allowScripts` 已放行该脚本。
 
 ## 功能速览
 

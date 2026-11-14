@@ -14,6 +14,7 @@ import type {
   StructureIssue,
   StructureValidation,
 } from '../lib/structureValidation';
+import { analysisEngine } from '../lib/chemistryBackend';
 
 export type EngineState = 'loading' | 'ready' | 'error';
 export type ValidationState = 'idle' | 'checking' | 'done' | 'error';
@@ -242,6 +243,7 @@ export function AnalysisPanel({
   const badgeCount = blocking.length > 0 ? blocking.length : warnings.length;
   const summaries = validation?.molecules ?? [];
   const single = summaries.find((summary) => summary.info)?.info ?? null;
+  const localEngine = analysisEngine() === 'local';
 
   const issuesRef = useRef<HTMLDivElement>(null);
   const previousBlocking = useRef(0);
@@ -335,11 +337,15 @@ export function AnalysisPanel({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        {engine === 'loading' && <Spinner label="正在加载 RDKit 分析引擎…" />}
+        {engine === 'loading' && (
+          <Spinner label={localEngine ? '正在连接本地计算服务…' : '正在加载 RDKit 分析引擎…'} />
+        )}
 
         {engine === 'error' && (
           <div className="rounded-lg border border-line-strong bg-hover px-3 py-2.5">
-            <p className="text-[12px] font-medium text-ink">RDKit 加载失败</p>
+            <p className="text-[12px] font-medium text-ink">
+              {localEngine ? '本地计算服务不可用' : 'RDKit 加载失败'}
+            </p>
             <p className="mt-1 break-words text-[11px] leading-relaxed text-ink-muted">
               {engineError ?? '未知错误'}
             </p>
@@ -461,7 +467,9 @@ export function AnalysisPanel({
       </div>
 
       <footer className="shrink-0 border-t border-line px-3 py-2 text-[10.5px] leading-relaxed text-ink-faint">
-        由 RDKit WASM 实时分析 · 每次编辑后自动刷新
+        {localEngine
+          ? '由本地 RDKit 服务实时分析 · 每次编辑后自动刷新'
+          : '由 RDKit WASM 实时分析 · 每次编辑后自动刷新'}
       </footer>
     </aside>
   );

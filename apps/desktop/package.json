@@ -1,0 +1,21 @@
+{
+  "name": "@zephyrlea/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Zephyrlea desktop shell: Electron window plus the local Python compute backend",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build",
+    "preview": "electron-vite preview",
+    "smoke": "electron . --self-test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "electron-vite": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}
