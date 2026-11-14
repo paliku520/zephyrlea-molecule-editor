@@ -666,6 +666,12 @@ export function MoleculeEditor() {
                   </div>
                 </div>
               )}
+
+              {ready && (
+                <p className="pointer-events-none absolute bottom-2.5 left-3 z-10 select-none text-[11px] leading-relaxed text-ink-muted">
+                  仅供教学与学习参考，请勿用于非法用途
+                </p>
+              )}
             </main>
 
             <AnalysisPanel

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Cpu, ExternalLink, FileText, Scale, Sparkles, User, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, Cpu, ExternalLink, FileText, Scale, ShieldAlert, Sparkles, User, X } from 'lucide-react';
 import licenseText from '../../LICENSE?raw';
-import { REPO_URL, DOCS_URL } from '../lib/site';
+import { DISCLAIMER_URL, REPO_URL, DOCS_URL } from '../lib/site';
 import { GitHubMark } from './icons/GitHubMark';
 
 interface AboutModalProps {
@@ -219,6 +219,16 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
             >
               <BookOpen size={13.5} strokeWidth={1.9} className="shrink-0" />
               <span className="truncate">使用说明与部署教程</span>
+            </a>
+            <a
+              href={DISCLAIMER_URL}
+              target="_blank"
+              rel="noreferrer noopener"
+              title="仅供教学与学习参考，禁止非法用途；部署者需自行承担运营与合规责任"
+              className="inline-flex h-7 min-w-0 items-center gap-2 rounded-md px-1.5 text-[11.5px] font-medium text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <ShieldAlert size={13.5} strokeWidth={1.9} className="shrink-0" />
+              <span className="truncate">免责声明</span>
             </a>
           </div>
           <button
