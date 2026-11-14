@@ -6,6 +6,7 @@ import {
   Moon,
   PanelBottom,
   PanelTop,
+  ScrollText,
   Sun,
   X,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import {
   type ToolbarPlacement,
   type Viewer3DToolbarAlign,
 } from '../lib/settings';
+import { desktopBridge } from '../lib/desktop';
 import { IconRadioFrame, IconRadioGroup, type IconRadioOption } from './ui/IconRadioGroup';
 import { Model3DSwitch } from './Model3DSwitch';
 
@@ -47,6 +49,8 @@ const ALIGN_OPTIONS: IconRadioOption<Viewer3DToolbarAlign>[] = VIEWER_3D_TOOLBAR
 );
 
 export function SettingsModal({ open, settings, onChange, onClose }: SettingsModalProps) {
+  const desktop = desktopBridge();
+
   useEffect(() => {
     if (!open) return;
 
@@ -190,6 +194,28 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
               </button>
             }
           />
+
+          {desktop && (
+            <>
+              <div className="mx-3 h-px bg-line" />
+
+              <SettingRow
+                title="系统日志"
+                description="Python 后端、主进程与界面的警告和错误。"
+                hint="打开一个独立窗口查看运行日志，也可以随时按 Ctrl/⌘ + Shift + L。"
+                control={
+                  <button
+                    type="button"
+                    onClick={() => void desktop.logs.open()}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line-strong px-2.5 text-[11.5px] font-medium text-ink-soft transition-colors hover:bg-hover-strong hover:text-ink"
+                  >
+                    <ScrollText size={14} strokeWidth={1.9} />
+                    打开日志窗口
+                  </button>
+                }
+              />
+            </>
+          )}
         </div>
 
         <div className="border-t border-line px-5 py-2.5 text-[11px] text-ink-faint">
