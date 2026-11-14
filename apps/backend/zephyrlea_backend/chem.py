@@ -1,10 +1,9 @@
-"""RDKit-backed structure analysis.
+"""RDKit-backed structure analysis, 2D layout and 3D conformer generation.
 
-The browser build computes the same numbers with RDKit's WebAssembly MinimalLib
-(``apps/web/src/lib/rdkit.ts``). This module reproduces that behaviour with the
-native RDKit build so both builds show identical values: the descriptor keys and
-the atom parsing rules below intentionally mirror MinimalLib's
-``get_descriptors()`` / ``get_json()`` output.
+This is the only chemistry engine in the app: the renderer (``apps/web-local``)
+talks to it over HTTP and no longer bundles any WebAssembly build. The descriptor
+keys and atom parsing rules below keep the field names the analysis panel has
+always used, so ``MoleculeInfo`` / ``RDKitProblem`` stay unchanged.
 """
 
 from __future__ import annotations

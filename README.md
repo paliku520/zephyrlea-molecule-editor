@@ -12,9 +12,10 @@
 
 | 目录 | 说明 |
 | --- | --- |
-| `apps/web/` | React + Vite 前端（同时是桌面版的渲染层） |
+| `apps/web-local/` | React + Vite 前端，同时是桌面版的渲染层；化学计算全部走本地后端 |
 | `apps/desktop/` | Electron 外壳，负责窗口、IPC 与原生另存 |
 | `apps/backend/` | Python（FastAPI + 原生 RDKit）本地计算服务，化学计算全在这里 |
+| `scripts/` | 版本号同步与纯静态版构建脚本 |
 
 > 前端不再内置任何 WebAssembly 计算引擎：分子分析、2D 坐标与 3D 构象都向本地后端请求。没有后端的纯静态页面会提示「未连接本地计算引擎，请确保软件已正确安装运行」。
 
@@ -30,7 +31,7 @@ npm run dev:web        # 终端 B：前端
 
 ```bash
 npm run build:web
-npm run preview --workspace=apps/web
+npm run preview --workspace=apps/web-local
 ```
 
 ### 桌面版（Electron）
@@ -54,7 +55,7 @@ npm run smoke:desktop   # 端到端冒烟：preload → IPC → Python → 分�
 
 本地服务提供四个接口：`/health`、`/analyze`（分子分析 + 价键校验）、`/api/layout2d`（RDKit 2D 坐标）、`/api/embed3d`（RDKit ETKDG + MMFF 构象）。桌面版全部经 IPC 访问；前端没有后端桥时不会退回任何 WASM 引擎，而是直接提示「未连接本地计算引擎」。想用浏览器直连本地服务调试时，先 `npm run dev:backend`（固定 8765 端口），再在页面控制台设置 `window.__zephyrleaBackendUrl = 'http://127.0.0.1:8765'`（或构建期提供 `VITE_ZEPHYRLEA_BACKEND`）。
 
-发版时用脚本统一改版本号（同时写入 `apps/desktop/package.json`、`apps/web/package.json` 与 `apps/web/src/lib/version.ts`）：
+发版时用脚本统一改版本号（同时写入 `apps/desktop/package.json`、`apps/web-local/package.json` 与 `apps/web-local/src/lib/version.ts`）：
 
 ```bash
 python scripts/bump_version.py 0.2.0      # 指定版本
@@ -88,20 +89,21 @@ python scripts/bump_version.py --check    # 版本不一致时退出码 1
 
 ## 部署与托管
 
-当前 `main` 分支只发布**桌面版**：前端的化学计算全部依赖随应用启动的本地 Python 服务，`apps/web/dist/` 单独部署时没有计算引擎（界面会提示「未连接本地计算引擎」）。
+当前 `main` 分支只发布**桌面版**：前端的化学计算全部依赖随应用启动的本地 Python 服务，`apps/web-local/dist/` 单独部署时没有计算引擎（界面会提示「未连接本地计算引擎」）。
 
-需要对外的纯静态网页版固定在 `v0.1.0` tag 上，它是一份完整独立的前端工程（自带 RDKit / OpenChemLib / sci-form 三套 WASM 引擎，构建产物约 20 MB），与本分支的改动互不影响：
+需要对外的纯静态网页版固定在 `v0.1.0` tag 上，它是一份完整独立的前端工程（自带 RDKit / OpenChemLib / sci-form 三套 WASM 引擎，产物约 20 MB）。一条命令即可从 tag 构建出来：
 
 ```bash
-git worktree add ../zephyrlea-static v0.1.0
-cd ../zephyrlea-static
-npm install
-npm run build          # 产物在 dist/，交给任意静态托管
+npm run build:web:static
+# 结果在 dist-static/，临时 worktree 会自动清理
 ```
 
-- **Vercel / Netlify / Cloudflare Pages**：在该 tag 上构建，命令 `npm run build`，输出目录 `dist`。
+脚本做的事：确认 `v0.1.0` 存在 → `git worktree add .temp-static v0.1.0` → 在临时目录 `npm ci && npm run build` → 把产物复制到 `dist-static/` → 删除临时 worktree。`.temp-static/` 与 `dist-static/` 都已加入 `.gitignore`。
+
+- **Cloudflare Pages**：构建命令 `npm run build:web:static`，输出目录 `dist-static`。
+- **Vercel / Netlify**：同上，或用 `v0.1.0` tag 直接构建（命令 `npm run build`，输出 `dist`）。
 - **GitHub Pages**：项目站点挂在 `/<仓库名>/` 下，构建要带路径：`npm run build -- --base=/zephyrlea-molecule-editor/`（自定义域名或用户主页站点用默认的 `--base=/`）。
-- **自建服务器**：`npm run build -- --base=/molecule/`，把 `dist/` 放进对应子目录，并让 `.wasm` 以 `application/wasm` 返回、开启 gzip / Brotli。
+- **自建服务器**：`npm run build -- --base=/molecule/`，把产物放进对应子目录，并让 `.wasm` 以 `application/wasm` 返回、开启 gzip / Brotli。
 - 注意：剪贴板 API 需要 HTTPS（或 localhost）；画板存档在浏览器 `localStorage` 中、按域名隔离；没有前端路由，因此不需要 `404.html` 回退。
 
 部署者需自行承担实例的运营、合规与安全责任，详见 [免责声明](DISCLAIMER.md)。

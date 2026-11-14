@@ -4,9 +4,11 @@
 
 ## 目录结构
 
-仓库使用 npm workspaces：Web 端位于 `apps/web/`，桌面外壳位于 `apps/desktop/`，本地计算服务位于 `apps/backend/`。下表中 `src/`、`public/`、`index.html`、`vite.config.ts` 等路径均相对 `apps/web/`。
+仓库使用 npm workspaces：渲染层位于 `apps/web-local/`，桌面外壳位于 `apps/desktop/`，本地计算服务位于 `apps/backend/`。下表中 `src/`、`public/`、`index.html`、`vite.config.ts` 等路径均相对 `apps/web-local/`。
 
 ```text
+scripts/bump_version.py      同步三处版本号
+scripts/build-static.mjs     从 v0.1.0 tag 构建纯静态版到 dist-static/
 apps/backend/main.py        本地计算服务入口（FastAPI + 原生 RDKit）
 apps/backend/zephyrlea_backend/chem.py    结构分析 / 2D 布局 / 3D 构象
 apps/backend/zephyrlea_backend/app.py     HTTP 路由、token 校验与 CORS
@@ -15,12 +17,12 @@ apps/desktop/src/main/index.ts            Electron 主进程：窗口、IPC、�
 apps/desktop/src/main/backend.ts          Python 子进程生命周期与 HTTP 客户端
 apps/desktop/src/main/self-test.ts        `--self-test` 端到端冒烟
 apps/desktop/src/preload/index.ts         contextBridge：window.zephyrlea
-apps/desktop/electron.vite.config.ts      主进程 / preload / 渲染层（root 指向 apps/web）
-apps/web/vite.shared.ts                   两个构建共用的插件与静默日志
-apps/web/src/lib/desktop.ts               桌面桥接口与探测
-apps/web/src/lib/chemistryTypes.ts        分析 / 2D / 3D 的数据契约（桥与后端共用）
-apps/web/src/lib/chemistryBackend.ts      唯一的化学计算入口（本地服务，无 WASM 兜底）
-apps/web/public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
+apps/desktop/electron.vite.config.ts      主进程 / preload / 渲染层（root 指向 apps/web-local）
+apps/web-local/vite.shared.ts                   两个构建共用的插件与静默日志
+apps/web-local/src/lib/desktop.ts               桌面桥接口与探测
+apps/web-local/src/lib/chemistryTypes.ts        分析 / 2D / 3D 的数据契约（桥与后端共用）
+apps/web-local/src/lib/chemistryBackend.ts      唯一的化学计算入口（本地服务，无 WASM 兜底）
+apps/web-local/public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
 src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
 src/components/AppHeader.tsx  页眉：标题、关于入口与 GitHub 仓库跳转
 src/components/AboutModal.tsx 关于弹窗：简介、技术栈、MIT 协议全文与作者（`LICENSE?raw` 内联）
@@ -96,7 +98,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 
 ## 关于桌面外壳与本地服务
 
-- 渲染层只有一份：`apps/desktop/electron.vite.config.ts` 把 renderer 的 `root` 指向 `apps/web`，并把 `index.html` 显式列为入口（electron-vite 默认只在 `<package>/index.html` 或 `src/renderer` 里找），因此 `npm run dev:web` 与 `npm run dev:desktop` 跑的是同一套源码。共用插件放在 `apps/web/vite.shared.ts`，两个配置各自引用，避免分叉；electron-vite 默认不压缩 renderer，这里显式打开 `minify`，让打包体积与 Web 构建一致。
+- 渲染层只有一份：`apps/desktop/electron.vite.config.ts` 把 renderer 的 `root` 指向 `apps/web-local`，并把 `index.html` 显式列为入口（electron-vite 默认只在 `<package>/index.html` 或 `src/renderer` 里找），因此 `npm run dev:web` 与 `npm run dev:desktop` 跑的是同一套源码。共用插件放在 `apps/web-local/vite.shared.ts`，两个配置各自引用，避免分叉；electron-vite 默认不压缩 renderer，这里显式打开 `minify`，让打包体积与 Web 构建一致。
 - 主进程用 `process.env.ELECTRON_RENDERER_URL` 判断开发 / 生产：前者 `loadURL` 指向 electron-vite 的开发服务器，后者 `loadFile('out/renderer/index.html')`。外部链接一律交给系统浏览器（`setWindowOpenHandler`），窗口开启 `contextIsolation` 与 `sandbox`，不开放 `nodeIntegration`。
 - Python 服务由 `LocalBackend` 拉起：`apps/backend/main.py` 先自己 `bind` 一个端口（默认 `--port 0` 交给系统分配），在 stdout 打印唯一一行 `ZEPHYRLEA_BACKEND_READY <port>`，主进程解析这一行拿到端口，再用 `/health` 轮询到就绪。异常退出会把 `starting` 清空，下次调用会重新拉起。
 - 认证用的 token 由主进程用 `randomBytes` 生成，通过环境变量 `ZEPHYRLEA_BACKEND_TOKEN` 传给子进程；服务端中间件校验 `x-zephyrlea-token`，缺失或不匹配一律 401。服务只监听 `127.0.0.1`，不暴露文档路由（`docs_url` / `openapi_url` 均为 `None`）。
@@ -110,7 +112,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 
 ## 关于 2D 布局与 3D 构象
 
-- 两者都走 `apps/web/src/lib/chemistryBackend.ts`：存在 Electron preload 桥时经 IPC，否则用探测到的 HTTP 地址；**没有任何 WASM 兜底**。探测不到时抛 `LocalEngineUnavailableError`（文案见上），由各处的 catch 直接显示。
+- 两者都走 `apps/web-local/src/lib/chemistryBackend.ts`：存在 Electron preload 桥时经 IPC，否则用探测到的 HTTP 地址；**没有任何 WASM 兜底**。探测不到时抛 `LocalEngineUnavailableError`（文案见上），由各处的 catch 直接显示。
 - 2D：`chem.generate_2d_molblock()` 解析结构（molblock 优先，保证原子顺序与编辑器节点一致）→ **清空所有原子坐标并删除构象** → `rdDepictor.Compute2DCoords()` → `Chem.WedgeMolBonds()` 补手性楔形键 → `MolToMolBlock()`。清坐标这一步不能省：编辑器传来的 molblock 一定带着当前画面的坐标，RDKit 在已有坐标时可能沿用它们，算出来的布局会歪。
 - 2D 回填：`editorBridge.relayout()` 与 `importSmiles()` 只请求本地 molblock；`applyCleanedLayout()` 把新结构按原键长缩放、按原重心对齐后逐个原子写回 Kekule 节点，原子数量或元素顺序对不上时视为失败，退回纯 JS 的 `layoutMolecule()`（整理结构按钮不会因此失效）。
 - 3D：`chem.embed_3d()` 解析 → 清坐标 → `AddHs()` → `EmbedMolecule(randomSeed=42)`；失败时用 `useRandomCoords=True, maxAttempts=50` 再试一次 → `MMFFOptimizeMolecule(maxIters=500)`（缺 MMFF 参数时退回 UFF，两者都没有参数就直接用嵌入坐标）→ `RemoveHs()` → 多片段沿 x 轴排开（间距 4 Å、整体居中）→ `MolToMolBlock()`。
@@ -118,6 +120,13 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 接口：`POST /api/layout2d` → `{"molfile": "…"}`（解析失败返回 422）；`POST /api/embed3d` → `{"sdf": "…", "atomCount", "bondCount", "fragmentCount", "elapsedMs"}`（多返回的计数直接用于 3D 窗口标题，省一次解析）。
 - 浏览器直连本地服务调试时，在页面里设置 `window.__zephyrleaBackendUrl = 'http://127.0.0.1:8765'`（或构建期 `VITE_ZEPHYRLEA_BACKEND`），探测到 `/health` 可用后缓存结果；后端因此加了只放行 `localhost` / `127.0.0.1` 来源的 CORS 规则。Electron 走 IPC，不需要这条规则。
 - 移除前后构建体积（`apps/desktop/out/renderer`，本机实测）：27.72 MB → 3.66 MB，其中 `sci_form_wasm_bg*.wasm`（12.6 MB）、`RDKit_minimal.wasm`（7.2 MB）与 `openchemlib` 代码块（1.37 MB）全部消失。
+
+## 关于纯静态版与 Cloudflare Pages
+
+- `main` 上的渲染层没有化学引擎，所以对外的静态站点仍由 `v0.1.0` tag 提供。`scripts/build-static.mjs`（`npm run build:web:static`）把这件事固化成一条命令：校验 tag 存在 → `git worktree add --detach .temp-static v0.1.0` → 在临时目录里 `npm ci`（没有锁文件时退回 `npm install`）→ `npm run build` → 复制 `dist/` 到根目录 `dist-static/` → `git worktree remove .temp-static --force` 并 `prune`。
+- 临时目录与产物都写进 `.gitignore`，因此跑完之后 `git status` 依旧干净；`finally` 里无条件清理，构建中途失败也不会留下 worktree，脚本兜底再清一次并返回非零退出码。
+- 实测产物 19.77 MB，含 `RDKit_minimal.wasm` 与 `sci_form_wasm_bg.wasm`；用 `python -m http.server` 直接托管 `dist-static/` 可以正常载入、分析阿司匹林（`C9H8O4`）且控制台无报错，可直接作为 Cloudflare Pages 的输出目录。
+- 改用 `npm ci` 的原因：tag 自带 `package-lock.json`，可复现依赖版本；`npm install` 会把 lockfile 重写一遍，产物可能漂移。
 
 ## 关于 3D 视图
 
