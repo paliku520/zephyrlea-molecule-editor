@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { createLogger, defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { APP_VERSION } from './src/lib/version.ts';
 
 // `sci-form-wasm` ships its `.wasm` inside the package but its `exports` map
 // only exposes `.`, `./alpha` and `./beta`, so the binary cannot be imported as
@@ -22,7 +23,16 @@ logger.warn = (msg, options) => {
 };
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      // Inject the version into the static page title so the tab matches the app
+      // without duplicating the number in index.html.
+      name: 'zephyrlea-app-version',
+      transformIndexHtml: (html) => html.replace(/__APP_VERSION__/g, `v${APP_VERSION}`),
+    },
+  ],
   customLogger: logger,
   resolve: {
     alias: [{ find: /^sci-form-wasm\/wasm(\?.*)?$/, replacement: `${sciFormWasm}$1` }],

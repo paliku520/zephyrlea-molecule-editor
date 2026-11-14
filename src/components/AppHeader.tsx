@@ -1,6 +1,7 @@
 import { Info } from 'lucide-react';
 import { GitHubMark } from './icons/GitHubMark';
 import { REPO_URL } from '../lib/site';
+import { APP_VERSION } from '../lib/version';
 
 interface AppHeaderProps {
   onOpenAbout: () => void;
@@ -12,6 +13,13 @@ export function AppHeader({ onOpenAbout }: AppHeaderProps) {
       <h1 className="min-w-0 truncate text-[14.5px] font-semibold tracking-[-0.01em] text-ink">
         ZephyrLea&apos;s Molecular Editor
       </h1>
+
+      <span
+        title={`当前版本 v${APP_VERSION}`}
+        className="shrink-0 rounded-full border border-line-strong px-1.5 py-[1px] text-[10px] font-medium tabular-nums text-ink-muted"
+      >
+        v{APP_VERSION}
+      </span>
 
       <button
         type="button"

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, BookOpen, Cpu, ExternalLink, FileText, Scale, ShieldAlert, Sparkles, User, X } from 'lucide-react';
 import licenseText from '../../LICENSE?raw';
 import { DISCLAIMER_URL, REPO_URL, DOCS_URL } from '../lib/site';
+import { APP_VERSION } from '../lib/version';
 import { GitHubMark } from './icons/GitHubMark';
 
 interface AboutModalProps {
@@ -113,7 +114,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
                 {showLicense ? 'MIT License' : "ZephyrLea's Molecular Editor"}
               </h2>
               <p className="mt-1 text-[11.5px] text-ink-muted">
-                {showLicense ? '本项目的开源协议全文' : '轻量化小分子结构编辑器 · v0.1.0'}
+                {showLicense ? '本项目的开源协议全文' : `轻量化小分子结构编辑器 · v${APP_VERSION}`}
               </p>
             </div>
           </div>

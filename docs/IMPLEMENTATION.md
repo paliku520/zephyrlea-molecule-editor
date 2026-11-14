@@ -20,7 +20,8 @@ src/lib/periodicTable.ts    元素周期表的符号表与标准长式布局（1
 src/components/PeriodicTableModal.tsx  自绘元素周期表弹窗（元素条与双击标签框共用）
 src/lib/elementColors.ts    深色 / 浅色两套元素配色（界面与画布共用）
 src/lib/settings.ts         设置模型、localStorage 持久化与主题应用
-src/lib/site.ts             页眉与关于弹窗共用的仓库链接、文档入口
+src/lib/site.ts             页眉与关于弹窗共用的仓库链接、文档与免责声明入口
+src/lib/version.ts          版本号唯一来源（页眉徽标、关于弹窗、浏览器标题共用）
 src/lib/boardPersistence.ts 画板自动保存 / 恢复（结构 molblock、原子坐标、缩放与视口位置）
 src/lib/rdkit.ts            RDKit WASM 加载、分子式 / 描述符分析、化学问题检测与开发模式自检入口
 src/lib/structureValidation.ts  分析 + 校验结果模型、价键错误归类与中文说明

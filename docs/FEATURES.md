@@ -6,7 +6,8 @@
 
 - 由 React 挂载的全屏 Kekule `Composer`，并隐藏 Kekule 自带的全部工具栏。
 - 使用 React + Tailwind 自绘顶栏、元素快捷条与左侧垂直工具栏。
-- **页眉**：最上方是一条固定页眉，左侧是产品名 `ZephyrLea's Molecular Editor` 与紧邻的「关于」按钮，右侧是跳转 GitHub 仓库（`paliku520/zephyrlea-molecule-editor`，新标签页打开）的按钮；页眉常驻顶部，不受工具栏「顶部 / 底部」设置影响。
+- **页眉**：最上方是一条固定页眉，左侧是产品名 `ZephyrLea's Molecular Editor`、紧随其后的版本徽标（`v0.1.0`）与「关于」按钮，右侧是跳转 GitHub 仓库（`paliku520/zephyrlea-molecule-editor`，新标签页打开）的按钮；页眉常驻顶部，不受工具栏「顶部 / 底部」设置影响。
+- **版本号**：唯一的来源是 `src/lib/version.ts` 的 `APP_VERSION`——页眉徽标、关于弹窗副标题直接引用它，浏览器标签页标题则由 `vite.config.ts` 在构建 / 开发时把 `index.html` 里的 `__APP_VERSION__` 占位符替换掉，因此标题在页面脚本执行前就是正确的。发版时记得同步 `package.json` 的 `version`。
 - **关于窗口**：「关于」按钮打开关于弹窗，内容包括产品简介、**主要能力**（绘制 / 分析 / 导出 / 三维）、核心技术栈、MIT 开源协议（点「查看完整协议」可在页面内直接阅读 `LICENSE` 全文，无需跳转）与作者信息；底部除了 GitHub 仓库链接，还提供「使用说明与部署教程」与「免责声明」入口。`Esc`、遮罩与「关闭」都能关掉它。
 - **画布免责声明**：2D 画板左下角常驻一行浅色小字「仅供教学与学习参考，请勿用于非法用途」。它不接收鼠标事件、不挡住绘制与框选，缩放或平移画布时也固定在左下角；完整条款见 [DISCLAIMER.md](../DISCLAIMER.md)。
 - 通过 Kekule 的交互控制器 API 切换绘制模式（`MolBondIaController`、`MolRingIaController`、`MolNodeChargeIaController`、`SelectIaController` 等），而不是重新实现绘图逻辑。
