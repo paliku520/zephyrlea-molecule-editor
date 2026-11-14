@@ -7,6 +7,7 @@
   "scripts": {
     "dev:web": "npm run dev --workspace=apps/web-local",
     "build:web": "npm run build --workspace=apps/web-local",
+    "build:web:static": "node scripts/build-static.mjs",
     "dev:desktop": "npm run dev --workspace=apps/desktop",
     "build:desktop": "npm run build --workspace=apps/desktop",
     "smoke:desktop": "npm run smoke --workspace=apps/desktop",
