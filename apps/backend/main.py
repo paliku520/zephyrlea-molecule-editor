@@ -7,6 +7,7 @@ Electron spawns this process with ``--watch-stdin`` and reads the single
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import socket
 import sys
@@ -34,11 +35,34 @@ def _exit_when_parent_closes_stdin() -> None:
     os._exit(0)
 
 
+def _configure_logging(level: str) -> None:
+    """路由 uvicorn 的日志，让 Electron 能按流区分级别。
+
+    - access log 走 stdout（每行一条请求记录）
+    - 错误 / 启动信息走 stderr
+
+    ``propagate = False`` 避免和 uvicorn 默认配置叠加后重复输出；handler 与
+    uvicorn 自带的 StreamHandler 一样逐条 flush，主进程才能即时读到。
+    """
+    handlers = {
+        "uvicorn.access": logging.StreamHandler(sys.stdout),
+        "uvicorn.error": logging.StreamHandler(sys.stderr),
+    }
+
+    for name, handler in handlers.items():
+        handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+
+        logger = logging.getLogger(name)
+        logger.handlers = [handler]
+        logger.propagate = False
+        logger.setLevel(level.upper())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Zephyrlea local chemistry backend")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0, help="0 picks a free port")
-    parser.add_argument("--log-level", default="warning")
+    parser.add_argument("--log-level", default="info")
     parser.add_argument(
         "--watch-stdin",
         action="store_true",
@@ -52,6 +76,7 @@ def main() -> int:
     if args.watch_stdin:
         threading.Thread(target=_exit_when_parent_closes_stdin, daemon=True).start()
 
+    _configure_logging(args.log_level)
     print(f"{READY_PREFIX} {port}", flush=True)
 
     server = uvicorn.Server(
@@ -60,7 +85,9 @@ def main() -> int:
             host=args.host,
             port=port,
             log_level=args.log_level,
-            access_log=False,
+            access_log=True,
+            # 日志由 _configure_logging 接管，不让 uvicorn 再覆盖一遍
+            log_config=None,
         )
     )
     server.run(sockets=[sock])

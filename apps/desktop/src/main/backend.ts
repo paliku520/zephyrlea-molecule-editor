@@ -2,12 +2,16 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Readable } from 'node:stream';
 import { app } from 'electron';
+import type { Logger, LogLevel } from './logger';
 
 const READY_PATTERN = /ZEPHYRLEA_BACKEND_READY\s+(\d+)/;
 const TOKEN_ENV = 'ZEPHYRLEA_BACKEND_TOKEN';
 const START_TIMEOUT_MS = 60_000;
 const HEALTH_TIMEOUT_MS = 20_000;
+/** 单行超过这个长度就丢弃前半段，防止没有换行的输出撑爆内存。 */
+const MAX_PENDING_CHARS = 64 * 1024;
 
 export interface BackendHealth {
   status: string;
@@ -53,6 +57,36 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Splits a stream into lines and hands each one over as soon as it is complete.
+ * Without this, several log lines would arrive glued together in one chunk.
+ */
+function forwardLines(stream: Readable, onLine: (line: string) => void): void {
+  let buffered = '';
+
+  stream.setEncoding('utf8');
+  stream.on('data', (chunk: string) => {
+    buffered += chunk;
+
+    let index = buffered.indexOf('\n');
+    while (index >= 0) {
+      const line = buffered.slice(0, index).replace(/\r$/, '');
+      buffered = buffered.slice(index + 1);
+      if (line.trim()) onLine(line);
+      index = buffered.indexOf('\n');
+    }
+
+    if (buffered.length > MAX_PENDING_CHARS) buffered = buffered.slice(-MAX_PENDING_CHARS);
+  });
+}
+
+/** Uvicorn writes everything to one of the two streams, so classify by content. */
+function classifyLevel(line: string): LogLevel {
+  if (/\b(?:error|exception|traceback|fatal|critical)\b/i.test(line)) return 'error';
+  if (/\b(?:warn|warning)\b/i.test(line)) return 'warn';
+  return 'info';
+}
+
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
@@ -88,6 +122,8 @@ export class LocalBackend {
   private child: ChildProcessWithoutNullStreams | null = null;
   private endpoint: string | null = null;
   private starting: Promise<void> | null = null;
+
+  constructor(private readonly logger: Logger) {}
 
   get url(): string | null {
     return this.endpoint;
@@ -134,6 +170,7 @@ export class LocalBackend {
 
   private async start(): Promise<void> {
     const { command, args, cwd } = resolvePython();
+    this.logger.info('backend', `启动本地计算服务：${command} ${args.join(' ')}`);
 
     const child = spawn(command, [...args, '--watch-stdin'], {
       cwd,
@@ -148,15 +185,28 @@ export class LocalBackend {
     });
     this.child = child;
 
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => console.log(`[backend] ${chunk.trimEnd()}`));
+    // stdout 是握手行与 access log，stderr 是 uvicorn 的错误日志；
+    // 两者都按行转发到系统日志，握手行交给 waitForReadyLine 单独处理。
+    forwardLines(child.stdout, (line) => {
+      if (READY_PATTERN.test(line)) return;
+      this.logger.log(classifyLevel(line), 'backend', line);
+    });
+    forwardLines(child.stderr, (line) => {
+      this.logger.log(classifyLevel(line), 'backend', line);
+    });
+
+    child.once('error', (error: Error) => {
+      this.logger.error('backend', `本地计算服务进程异常：${error.message}`);
+    });
+
     child.once('exit', (code) => {
       if (this.child !== child) return;
       this.child = null;
       this.endpoint = null;
       this.starting = null;
-      console.warn(`[backend] exited with code ${code ?? 'unknown'}`);
+      const message = `本地计算服务已退出（退出码 ${code ?? 'unknown'}）`;
+      if (code === 0) this.logger.info('backend', message);
+      else this.logger.error('backend', message);
     });
 
     const port = await this.waitForReadyLine(child);
