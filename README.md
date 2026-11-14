@@ -63,8 +63,6 @@ python scripts/bump_version.py --bump patch   # 0.1.0 -> 0.1.1
 python scripts/bump_version.py --check    # 版本不一致时退出码 1
 ```
 
-> Electron 固定为 `31.7.7`：更新的主版本在这台 Windows 10 上启动即崩溃，`31.7.7` 已验证可用。electron 的二进制由 postinstall 下载，仓库根 `package.json` 的 `allowScripts` 已放行该脚本。
-
 ## 功能速览
 
 - **绘制**：元素原子、单 / 双 / 三键、楔形键、虚楔键、配位键、正负电荷、R 基团与各类环模板；元素工具既能插入也能就地替换已有原子，全部操作可撤销 / 重做。
