@@ -1,4 +1,11 @@
-import type { ProblemSource, StructureInspection } from './rdkit';
+import type {
+  Embed3DResult,
+  ProblemSource,
+  StructureInspection,
+  StructureSource,
+} from './chemistryTypes';
+
+export type { Embed3DResult, StructureSource };
 
 export interface DesktopSaveRequest {
   fileName: string;
@@ -24,6 +31,8 @@ interface DesktopBridge {
   backend: {
     health(): Promise<DesktopBackendHealth>;
     analyze(source: ProblemSource): Promise<StructureInspection>;
+    layout2d(source: StructureSource): Promise<{ molfile: string }>;
+    embed3d(source: StructureSource): Promise<Embed3DResult>;
   };
   saveFile(request: DesktopSaveRequest): Promise<DesktopSaveResult>;
 }

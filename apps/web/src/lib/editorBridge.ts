@@ -12,6 +12,7 @@ import { installLabelBaseline } from './kekuleLabelStyle';
 import { installAtomOnlyNodePicker, installNodeSetter, installPeriodicTablePicker } from './kekuleNodeSetter';
 import { getEditorScroller, getMolecules, getObjScreenScale, getUnionBox } from './kekuleSpace';
 import { layoutMolecule } from './moleculeLayout';
+import { requestLayout2D } from './chemistryBackend';
 import {
   EmptyStructureError,
   exportMoleculeImage,
@@ -130,12 +131,6 @@ function getThemeRenderColors(theme: ThemeMode): ThemeRenderColors {
 const ELEMENT_TOOL_CONTROLLER_ID = 'RepositoryStructureFragmentIaController';
 
 const elementRepositoryItems = new Map<string, any>();
-let openChemLibPromise: Promise<typeof import('openchemlib')> | null = null;
-
-function loadOpenChemLib() {
-  openChemLibPromise ??= import('openchemlib');
-  return openChemLibPromise;
-}
 
 interface FitToViewOptions {
   /** Let the view zoom in when the drawing is smaller than the viewport. */
@@ -564,6 +559,51 @@ function getCentroid(nodes: any[]) {
   }
 
   return { x: x / nodes.length, y: y / nodes.length };
+}
+
+/**
+ * Copies the coordinates of a freshly laid-out molecule onto the molecule that
+ * is already on the canvas, scaling to keep the original bond length and
+ * centring it where the old structure was. Returns false when the two do not
+ * line up atom-for-atom, so the caller can try the next layout backend.
+ */
+function applyCleanedLayout(
+  K: KekuleNamespace,
+  molecule: any,
+  cleanedMolecule: any,
+  oldBondLength: number,
+): boolean {
+  const oldNodes: any[] = molecule?.getNodes?.() ?? [];
+  const newNodes: any[] = cleanedMolecule?.getNodes?.() ?? [];
+
+  if (oldNodes.length === 0 || newNodes.length !== oldNodes.length) return false;
+
+  const sameAtoms = oldNodes.every(
+    (node, index) => node.getSymbol?.() === newNodes[index].getSymbol?.(),
+  );
+  if (!sameAtoms) return false;
+
+  const newBondLength = getMedianBondLength(K, cleanedMolecule);
+  const rawScale = newBondLength > 0 ? oldBondLength / newBondLength : 1;
+  const scale = Math.min(Math.max(rawScale, 0.2), 5);
+
+  const oldCenter = getCentroid(oldNodes);
+  const rawNewCenter = getCentroid(newNodes);
+  const newCenter = { x: rawNewCenter.x * scale, y: rawNewCenter.y * scale };
+  const offsetX = oldCenter.x - newCenter.x;
+  const offsetY = oldCenter.y - newCenter.y;
+
+  oldNodes.forEach((node, index) => {
+    const coord = newNodes[index].getCoord2D?.(true);
+    if (coord) {
+      node.setCoord2D?.({
+        x: coord.x * scale + offsetX,
+        y: coord.y * scale + offsetY,
+      });
+    }
+  });
+
+  return true;
 }
 
 /**
@@ -1313,22 +1353,16 @@ export function createEditorBridge(
       const trimmed = smiles.trim();
       if (!trimmed) return false;
 
-      try {
-        const { Molecule: OclMolecule } = await loadOpenChemLib();
-        const oclMolecule = OclMolecule.fromSmiles(trimmed);
-        oclMolecule.inventCoordinates();
+      // 2D 坐标由本地 RDKit 生成；后端不可用时直接抛出统一提示，
+      // 不再退回任何前端引擎。
+      const localMolfile = await requestLayout2D({ smiles: trimmed, molfile: null });
+      const localMolecule = K.IO.loadFormatData(localMolfile, 'mol');
+      if (!localMolecule) return false;
 
-        const kekuleMolecule = K.IO.loadFormatData(oclMolecule.toMolfile(), 'mol');
-        if (!kekuleMolecule) return false;
-
-        composer.setChemObj?.(kekuleMolecule);
-        repaint();
-        refitAfterLoad(K, composer, board);
-        return true;
-      } catch (error) {
-        console.error('[Kekule] Failed to import SMILES', error);
-        return false;
-      }
+      composer.setChemObj?.(localMolecule);
+      repaint();
+      refitAfterLoad(K, composer, board);
+      return true;
     },
     cleanUp() {
       const molecules = getMolecules(K, composer).filter(
@@ -1337,8 +1371,8 @@ export function createEditorBridge(
       if (molecules.length === 0) return 0;
 
       // Step 1: pack the scattered structures into tidy rows. This only moves
-      // whole structures around - no coordinates are recomputed and no
-      // OpenChemLib chunk is pulled in, so the whole call stays cheap.
+      // whole structures around - no coordinates are recomputed, so the whole
+      // call stays cheap and needs no backend.
       if (arrangeFragments(K, composer, editor)) {
         repaint();
       }
@@ -1358,73 +1392,31 @@ export function createEditorBridge(
       const molecules = getMolecules(K, composer);
       if (molecules.length === 0) return 0;
 
-      let OclMolecule: typeof import('openchemlib').Molecule | null = null;
-      try {
-        ({ Molecule: OclMolecule } = await loadOpenChemLib());
-      } catch (error) {
-        console.warn('[Clean Up] OpenChemLib unavailable, using fallback layout', error);
-      }
-
       const space = editor.getChemSpace?.();
       space?.beginUpdate?.();
 
       try {
         for (const molecule of molecules) {
-          let cleaned = false;
-
           // Relayout keeps each structure's bond length; only the zoom is
           // normalised afterwards.
           const oldBondLength = getMedianBondLength(K, molecule);
+          let cleaned = false;
 
-          if (OclMolecule) {
-            try {
-              const molfile = K.IO.saveFormatData(molecule, 'mol');
-              if (molfile) {
-                const oclMolecule = OclMolecule.fromMolfile(molfile);
-                oclMolecule.inventCoordinates();
+          const molfile = K.IO.saveFormatData(molecule, 'mol');
+          const smiles = K.IO.saveFormatData(molecule, 'smi');
+          if (molfile || smiles) {
+            // 后端不可用时会抛出统一提示，由界面弹出，不再退回前端布局引擎。
+            const localMolfile = await requestLayout2D({
+              smiles: typeof smiles === 'string' ? smiles : '',
+              molfile: typeof molfile === 'string' ? molfile : null,
+            });
 
-                const cleanedMolecule = K.IO.loadFormatData(oclMolecule.toMolfile(), 'mol');
-                const oldNodes: any[] = molecule.getNodes?.() ?? [];
-                const newNodes: any[] = cleanedMolecule?.getNodes?.() ?? [];
-
-                if (oldNodes.length > 0 && newNodes.length === oldNodes.length) {
-                  const sameAtoms = oldNodes.every(
-                    (node, index) => node.getSymbol?.() === newNodes[index].getSymbol?.(),
-                  );
-
-                  if (sameAtoms) {
-                    const newBondLength = getMedianBondLength(K, cleanedMolecule);
-                    const rawScale = newBondLength > 0 ? oldBondLength / newBondLength : 1;
-                    const scale = Math.min(Math.max(rawScale, 0.2), 5);
-
-                    const oldCenter = getCentroid(oldNodes);
-                    const rawNewCenter = getCentroid(newNodes);
-                    const newCenter = {
-                      x: rawNewCenter.x * scale,
-                      y: rawNewCenter.y * scale,
-                    };
-                    const offsetX = oldCenter.x - newCenter.x;
-                    const offsetY = oldCenter.y - newCenter.y;
-
-                    oldNodes.forEach((node, index) => {
-                      const coord = newNodes[index].getCoord2D?.(true);
-                      if (coord) {
-                        node.setCoord2D?.({
-                          x: coord.x * scale + offsetX,
-                          y: coord.y * scale + offsetY,
-                        });
-                      }
-                    });
-
-                    cleaned = true;
-                  }
-                }
-              }
-            } catch (error) {
-              console.warn('[Clean Up] OpenChemLib layout failed, using fallback', error);
-            }
+            const cleanedMolecule = K.IO.loadFormatData(localMolfile, 'mol');
+            cleaned = applyCleanedLayout(K, molecule, cleanedMolecule, oldBondLength);
           }
 
+          // 后端坐标与画布节点对不上（例如结构刚被改动）时，用纯 JS 布局兜底，
+          // 保证按钮不会因为一次取巧的失败而失效。
           if (!cleaned) {
             layoutMolecule(K, molecule, oldBondLength);
           }
