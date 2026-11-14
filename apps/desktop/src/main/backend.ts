@@ -58,6 +58,26 @@ function describeError(error: unknown): string {
   return String(error);
 }
 
+/** Pull the friendly message out of a failed response body, if there is one. */
+function describeFailure(payload: string): string | null {
+  if (!payload) return null;
+
+  try {
+    const parsed = JSON.parse(payload) as {
+      error?: { message?: string };
+      detail?: string | { message?: string };
+    };
+
+    if (typeof parsed.error?.message === 'string') return parsed.error.message;
+    if (typeof parsed.detail === 'string') return parsed.detail;
+    if (typeof parsed.detail?.message === 'string') return parsed.detail.message;
+  } catch {
+    // 不是 JSON（例如代理返回的 HTML 错误页），退回原文
+  }
+
+  return payload.length > 300 ? `${payload.slice(0, 300)}…` : payload;
+}
+
 /**
  * Owns the Python process that computes structures for the desktop build.
  * The renderer never talks to it directly: every call is proxied over IPC and
@@ -92,8 +112,10 @@ export class LocalBackend {
     });
 
     if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(`本地计算服务返回 ${response.status}${detail ? `：${detail}` : ''}`);
+      // 后端用 {"error": {"message"}} 描述可预期的失败（例如 3D 嵌入失败），
+      // 直接把这句话透给界面，比「返回 422」有用得多。
+      const payload = await response.text().catch(() => '');
+      throw new Error(describeFailure(payload) ?? `本地计算服务返回 ${response.status}`);
     }
 
     return (await response.json()) as T;

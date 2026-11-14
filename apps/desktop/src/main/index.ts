@@ -103,6 +103,17 @@ function registerIpc(): void {
     return backend.request('/health');
   });
 
+  ipcMain.handle('chemistry:layout2d', async (_event, source: AnalyzeSource) => {
+    await backend.ensureStarted();
+    return backend.request('/api/layout2d', source);
+  });
+
+  ipcMain.handle('chemistry:embed3d', async (_event, source: AnalyzeSource) => {
+    await backend.ensureStarted();
+    // 3D 构象可能较慢，给足超时时间
+    return backend.request('/api/embed3d', source, 120_000);
+  });
+
   ipcMain.handle('file:save', async (event, request: SaveRequest) => {
     const owner = BrowserWindow.fromWebContents(event.sender);
     return saveFile(owner ?? undefined, request);

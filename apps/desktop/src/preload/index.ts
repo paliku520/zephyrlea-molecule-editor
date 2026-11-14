@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-interface InspectSource {
+interface StructureSource {
   smiles: string;
   molfile: string | null;
 }
@@ -14,7 +14,9 @@ const bridge = {
   platform: process.platform,
   backend: {
     health: () => ipcRenderer.invoke('backend:health'),
-    analyze: (source: InspectSource) => ipcRenderer.invoke('chemistry:analyze', source),
+    analyze: (source: StructureSource) => ipcRenderer.invoke('chemistry:analyze', source),
+    layout2d: (source: StructureSource) => ipcRenderer.invoke('chemistry:layout2d', source),
+    embed3d: (source: StructureSource) => ipcRenderer.invoke('chemistry:embed3d', source),
   },
   saveFile: (request: SaveRequest) => ipcRenderer.invoke('file:save', request),
 };
