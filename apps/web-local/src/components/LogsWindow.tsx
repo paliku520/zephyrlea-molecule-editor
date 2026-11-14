@@ -14,16 +14,32 @@ const LEVEL_FILTERS: { value: LevelFilter; label: string }[] = [
   { value: 'error', label: 'ERROR' },
 ];
 
+/** 选中态直接用该级别的实色，扫一眼就知道当前在看哪一级。 */
+const FILTER_ACTIVE: Record<LevelFilter, string> = {
+  all: 'bg-hover-strong text-ink',
+  info: 'bg-[var(--log-info-badge)] text-white',
+  warn: 'bg-[var(--log-warn-badge)] text-[var(--log-warn-badge-ink)]',
+  error: 'bg-[var(--log-error-badge)] text-[var(--log-error-badge-ink)]',
+};
+
+/** 级别配色取自 index.css 里的 --log-* 变量：文字用高饱和前景，badge 用实色底。 */
 const LEVEL_TEXT: Record<LogLevel, string> = {
-  info: 'text-ink-soft',
-  warn: 'text-warning',
-  error: 'text-danger',
+  info: 'text-[var(--log-info)]',
+  warn: 'text-[var(--log-warn)]',
+  error: 'text-[var(--log-error)]',
 };
 
 const LEVEL_BADGE: Record<LogLevel, string> = {
-  info: 'bg-hover text-ink-muted',
-  warn: 'bg-warning/15 text-warning',
-  error: 'bg-danger/15 text-danger',
+  info: 'bg-[var(--log-info-badge)] text-white',
+  warn: 'bg-[var(--log-warn-badge)] text-[var(--log-warn-badge-ink)]',
+  error: 'bg-[var(--log-error-badge)] text-[var(--log-error-badge-ink)]',
+};
+
+/** 行首色条与整行底纹，让 WARN / ERROR 在一屏日志里一眼可见。 */
+const LEVEL_ROW: Record<LogLevel, string> = {
+  info: 'border-l-transparent hover:bg-hover/50',
+  warn: 'border-l-[var(--log-warn)] bg-[var(--log-warn)]/[0.07] hover:bg-[var(--log-warn)]/[0.12]',
+  error: 'border-l-[var(--log-error)] bg-[var(--log-error)]/[0.09] hover:bg-[var(--log-error)]/[0.15]',
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -145,9 +161,9 @@ export function LogsWindow() {
                 type="button"
                 onClick={() => setLevelFilter(filter.value)}
                 aria-pressed={levelFilter === filter.value}
-                className={`h-6 rounded px-2 text-[11px] font-medium transition-colors ${
+                className={`h-6 rounded px-2 text-[11px] font-semibold transition-colors ${
                   levelFilter === filter.value
-                    ? 'bg-hover-strong text-ink'
+                    ? FILTER_ACTIVE[filter.value]
                     : 'text-ink-muted hover:text-ink'
                 }`}
               >
@@ -205,14 +221,17 @@ export function LogsWindow() {
         ) : (
           <ol className="divide-y divide-line/60">
             {visible.map((entry) => (
-              <li key={entry.id} className="flex items-start gap-2 px-3 py-1 hover:bg-hover/50">
+              <li
+                key={entry.id}
+                className={`flex items-start gap-2 border-l-2 px-3 py-1 transition-colors ${LEVEL_ROW[entry.level]}`}
+              >
                 <span className="shrink-0 text-ink-faint">{formatTime(entry.timestamp)}</span>
                 <span
-                  className={`w-[52px] shrink-0 rounded px-1 text-center text-[10px] font-semibold ${LEVEL_BADGE[entry.level]}`}
+                  className={`w-[52px] shrink-0 rounded px-1 text-center text-[10px] font-bold tracking-wide ${LEVEL_BADGE[entry.level]}`}
                 >
                   {entry.level.toUpperCase()}
                 </span>
-                <span className="w-[48px] shrink-0 text-[10px] text-ink-faint">
+                <span className="w-[48px] shrink-0 text-[10px] font-semibold tracking-wide text-ink-muted">
                   {SOURCE_LABEL[entry.source] ?? entry.source.toUpperCase()}
                 </span>
                 <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${LEVEL_TEXT[entry.level]}`}>

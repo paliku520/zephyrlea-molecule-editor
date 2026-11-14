@@ -64,6 +64,16 @@
   --shell-scrim: rgba(8, 8, 10, 0.55);
   --shell-scrollbar-thumb: rgba(255, 255, 255, 0.22);
   --shell-glyph-filter: invert(1) brightness(1.5);
+
+  /* 系统日志的级别配色：比界面语义色更饱和，方便在一屏文字里快速扫读 */
+  --log-info: #7cc0ff;
+  --log-warn: #ffc046;
+  --log-error: #ff6b6b;
+  --log-info-badge: #1d6fe0;
+  --log-warn-badge: #d97706;
+  --log-error-badge: #dc2626;
+  --log-error-badge-ink: #ffffff;
+  --log-warn-badge-ink: #1a1204;
 }
 
 [data-theme="light"] {
@@ -95,6 +105,16 @@
   --shell-scrim: rgba(15, 23, 42, 0.28);
   --shell-scrollbar-thumb: rgba(17, 24, 39, 0.22);
   --shell-glyph-filter: none;
+
+  /* 浅色主题下把文字压深，色块（badge）仍是高饱和底 + 白字 */
+  --log-info: #1a5fd0;
+  --log-warn: #9a5b00;
+  --log-error: #c62828;
+  --log-info-badge: #1d6fe0;
+  --log-warn-badge: #d97706;
+  --log-error-badge: #dc2626;
+  --log-error-badge-ink: #ffffff;
+  --log-warn-badge-ink: #1a1204;
 }
 
 html,
