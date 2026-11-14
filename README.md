@@ -8,16 +8,18 @@
 
 ## 快速开始
 
+仓库采用 npm workspaces 单仓结构：Web 端在 `apps/web/`，本地后端占位在 `apps/backend/`。
+
 ```bash
 npm install
-npm run dev
+npm run dev:web
 ```
 
-生产构建：
+生产构建与本地预览：
 
 ```bash
-npm run build
-npm run preview
+npm run build:web
+npm run preview --workspace=apps/web
 ```
 
 ## 功能速览
@@ -44,11 +46,11 @@ npm run preview
 
 ## 部署与托管
 
-构建产物是纯静态站点（`dist/`），没有后端：`npm run build` 之后把 `dist/` 交给任意静态托管即可。首次打开会按需下载约 16 MB 的 WebAssembly（RDKit + 三维构象引擎），其余全部在本地运行，不访问任何外部接口。
+Web 端构建产物是纯静态站点（`apps/web/dist/`），当前没有后端：`npm run build:web` 之后把 `apps/web/dist/` 交给任意静态托管即可。首次打开会按需下载约 16 MB 的 WebAssembly（RDKit + 三维构象引擎），其余全部在本地运行，不访问任何外部接口。
 
-- **Vercel / Netlify / Cloudflare Pages**：导入仓库，构建命令 `npm run build`，输出目录 `dist`，其余保持默认；部署在域名根目录时无需额外配置。
-- **GitHub Pages**：Settings → Pages → Source 选 **GitHub Actions**，用官方 Pages 模板构建并上传 `dist`。项目站点挂在 `/<仓库名>/` 下，所以构建要带路径：`npm run build -- --base=/zephyrlea-molecule-editor/`（自定义域名或用户主页站点用默认的 `--base=/`）。也可以手动构建后把 `dist/` 推到 `gh-pages` 分支。
-- **自建服务器**：`npm run build -- --base=/molecule/`，把 `dist/` 放进对应子目录，并让 `.wasm` 以 `application/wasm` 返回、开启 gzip / Brotli。
+- **Vercel / Netlify / Cloudflare Pages**：导入仓库，构建命令 `npm run build:web`，输出目录 `apps/web/dist`，其余保持默认；部署在域名根目录时无需额外配置。
+- **GitHub Pages**：Settings → Pages → Source 选 **GitHub Actions**，用官方 Pages 模板构建并上传 `apps/web/dist`。项目站点挂在 `/<仓库名>/` 下，所以构建要带路径：`npm run build --workspace=apps/web -- --base=/zephyrlea-molecule-editor/`（自定义域名或用户主页站点用默认的 `--base=/`）。也可以手动构建后把 `apps/web/dist/` 推到 `gh-pages` 分支。
+- **自建服务器**：`npm run build --workspace=apps/web -- --base=/molecule/`，把 `apps/web/dist/` 放进对应子目录，并让 `.wasm` 以 `application/wasm` 返回、开启 gzip / Brotli。
 - 注意：剪贴板 API 需要 HTTPS（或 localhost）；画板存档在浏览器 `localStorage` 中、按域名隔离；没有前端路由，因此不需要 `404.html` 回退。
 
 部署者需自行承担实例的运营、合规与安全责任，详见 [免责声明](DISCLAIMER.md)。

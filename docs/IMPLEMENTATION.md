@@ -4,8 +4,11 @@
 
 ## 目录结构
 
+仓库使用 npm workspaces：Web 端位于 `apps/web/`，本地后端入口为 `apps/backend/main.py`（占位，暂未实现）。下表中 `src/`、`public/`、`index.html`、`vite.config.ts` 等路径均相对 `apps/web/`。
+
 ```text
-public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
+apps/backend/main.py        本地后端入口（占位，暂未实现）
+apps/web/public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
 src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
 src/components/AppHeader.tsx  页眉：标题、关于入口与 GitHub 仓库跳转
 src/components/AboutModal.tsx 关于弹窗：简介、技术栈、MIT 协议全文与作者（`LICENSE?raw` 内联）
