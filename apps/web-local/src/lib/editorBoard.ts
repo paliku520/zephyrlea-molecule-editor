@@ -427,8 +427,21 @@ export function createEditorBoard(
     const renderedY = (wanted.y / ratio) * zoom;
     if (renderedX > BOARD_MAX_CANVAS_PX || renderedY > BOARD_MAX_CANVAS_PX) return;
 
+    const scale = getObjScreenScale(editor);
+    if (scale <= 0) return;
+
+    // Content that crosses the top/left border is pulled back into the surface,
+    // which moves every fragment. Kekule's own scroll restore keeps the scroll
+    // offset rather than the picture, so the whole drawing would jump by the
+    // shift - most visible right after Relayout, whose new geometry can poke out
+    // of the surface even when the drawing itself did not move. Grow the surface
+    // first (so the scroll range is already large enough), then shift the
+    // viewport along with the content: nothing moves on screen.
     pauseScrollTracking();
-    editor._expandChemSpaceSizeAndShiftChildrenCoords?.(wanted, overflow, K.CoordMode.COORD2D);
+    editor._expandChemSpaceSizeAndShiftChildrenCoords?.(wanted, null, K.CoordMode.COORD2D);
+    if (overflow.x > 0 || overflow.y > 0) {
+      shiftView(overflow.x * scale, overflow.y * scale);
+    }
   };
 
   const scheduleContentFit = () => {

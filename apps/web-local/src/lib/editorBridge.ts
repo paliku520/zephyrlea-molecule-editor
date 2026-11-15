@@ -1,5 +1,5 @@
 import type { EditorBoard } from './editorBoard';
-import { createEditorBoard, MAX_ZOOM, MIN_ZOOM } from './editorBoard';
+import { createEditorBoard } from './editorBoard';
 import {
   installBoardPersistence,
   type BoardPersistence,
@@ -141,19 +141,8 @@ interface FitToViewOptions {
   minZoom?: number;
   /** Upper zoom bound; defaults to 2.6 (or the current zoom when zooming in is off). */
   maxZoom?: number;
-  /**
-   * Fraction of the viewport the drawing should fill. When set, the fit zooms
-   * both in and out so every drawing ends up at the same relative size.
-   */
-  coverage?: number;
 }
 
-/**
- * Share of the viewport the drawing fills after Clean Up, on its limiting axis.
- * Slightly below the 75% target because the geometric box ignores the pixels the
- * atom labels add around it, so the rendered drawing ends up a bit larger.
- */
-const VIEW_FIT_COVERAGE = 0.72;
 /** Pixels kept free around the drawing by the plain "reset zoom" fit. */
 const VIEW_FIT_PADDING = 120;
 
@@ -200,17 +189,10 @@ function fitToView(
 
   if (options.onlyWhenClipped && !isContentClipped(K, composer, editor)) return false;
 
-  const coverage = options.coverage;
-  const factor =
-    coverage === undefined
-      ? Math.min(
-          (visible.width - VIEW_FIT_PADDING) / contentWidth,
-          (visible.height - VIEW_FIT_PADDING) / contentHeight,
-        )
-      : Math.min(
-          (visible.width * coverage) / contentWidth,
-          (visible.height * coverage) / contentHeight,
-        );
+  const factor = Math.min(
+    (visible.width - VIEW_FIT_PADDING) / contentWidth,
+    (visible.height - VIEW_FIT_PADDING) / contentHeight,
+  );
   const currentZoom = editor.getCurrZoom?.() ?? 1;
   const maxZoom = options.maxZoom ?? (options.allowZoomIn === false ? currentZoom : 2.6);
   const minZoom = options.minZoom ?? 0.45;
@@ -394,7 +376,10 @@ function arrangeFragments(K: KekuleNamespace, composer: any, editor: any) {
 
     for (const item of items) {
       const extra = currentRow.length === 0 ? item.width : item.width + ARRANGE_GAP_PX;
-      if (currentRow.length >= perRow || currentWidth + extra > availableWidth) {
+      // A structure wider than the viewport must not open an empty row: an empty
+      // row has no height, which would send every following row to -Infinity.
+      const overflowsRow = currentRow.length > 0 && currentWidth + extra > availableWidth;
+      if (currentRow.length >= perRow || overflowsRow) {
         rows.push(currentRow);
         currentRow = [];
         currentWidth = 0;
@@ -534,38 +519,74 @@ function refitAfterLoad(K: KekuleNamespace, composer: any, board: EditorBoard) {
   });
 }
 
-function getMedianBondLength(K: KekuleNamespace, molecule: any): number {
-  try {
-    const median = molecule?.getConnectorLengthMedian?.(K.CoordMode.COORD2D, true);
-    if (typeof median === 'number' && Number.isFinite(median) && median > 0) {
-      return median;
-    }
-  } catch {
-    // fall through to the default bond length
-  }
-
-  return K.globalOptions?.structure?.defaultBondLength2D ?? 0.8;
+interface Point2D {
+  x: number;
+  y: number;
 }
 
-function getCentroid(nodes: any[]) {
-  if (nodes.length === 0) return { x: 0, y: 0 };
+/**
+ * Mean length of every bond of the molecule, in object units. Relayout measures
+ * the old structure with it and divides the backend layout by its own mean, so
+ * the regularised structure keeps the bond length the user drew.
+ */
+function getAverageBondLength(K: KekuleNamespace, molecule: any): number {
+  let total = 0;
+  let count = 0;
 
-  let x = 0;
-  let y = 0;
-  for (const node of nodes) {
-    const coord = node.getCoord2D?.(true) ?? { x: 0, y: 0 };
-    x += coord.x;
-    y += coord.y;
+  for (const bond of molecule?.getAllContainingConnectors?.() ?? []) {
+    const length = bond?.getLength?.(K.CoordMode.COORD2D, true);
+    if (typeof length === 'number' && Number.isFinite(length) && length > 0) {
+      total += length;
+      count += 1;
+    }
   }
 
-  return { x: x / nodes.length, y: y / nodes.length };
+  return count > 0 ? total / count : 0;
+}
+
+/** Centre of the bounding box around `nodes`, in their own coordinate frame. */
+function getBoundsCenter(nodes: any[]): Point2D | null {
+  let x1 = Number.POSITIVE_INFINITY;
+  let y1 = Number.POSITIVE_INFINITY;
+  let x2 = Number.NEGATIVE_INFINITY;
+  let y2 = Number.NEGATIVE_INFINITY;
+
+  for (const node of nodes) {
+    const coord = node.getCoord2D?.(true);
+    if (!coord) continue;
+
+    x1 = Math.min(x1, coord.x);
+    y1 = Math.min(y1, coord.y);
+    x2 = Math.max(x2, coord.x);
+    y2 = Math.max(y2, coord.y);
+  }
+
+  return Number.isFinite(x1) ? { x: (x1 + x2) / 2, y: (y1 + y2) / 2 } : null;
+}
+
+/** Move every atom of `molecule` so its bounding-box centre lands on `target`. */
+function moveMoleculeToCenter(molecule: any, target: Point2D | null) {
+  const nodes: any[] = molecule?.getNodes?.() ?? [];
+  const center = getBoundsCenter(nodes);
+  if (!target || !center) return;
+
+  const dx = target.x - center.x;
+  const dy = target.y - center.y;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return;
+
+  for (const node of nodes) {
+    const coord = node.getCoord2D?.(true);
+    if (coord) node.setCoord2D?.({ x: coord.x + dx, y: coord.y + dy });
+  }
 }
 
 /**
  * Copies the coordinates of a freshly laid-out molecule onto the molecule that
- * is already on the canvas, scaling to keep the original bond length and
- * centring it where the old structure was. Returns false when the two do not
- * line up atom-for-atom, so the caller can try the next layout backend.
+ * is already on the canvas. The new geometry is scaled by the ratio of the two
+ * mean bond lengths, then translated so its bounding-box centre stays exactly
+ * where the old one was - relayout only regularises the bonds, the structure's
+ * footprint and place on the canvas never change. Returns false when the two do
+ * not line up atom-for-atom, so the caller can fall back to the built-in layout.
  */
 function applyCleanedLayout(
   K: KekuleNamespace,
@@ -583,15 +604,19 @@ function applyCleanedLayout(
   );
   if (!sameAtoms) return false;
 
-  const newBondLength = getMedianBondLength(K, cleanedMolecule);
-  const rawScale = newBondLength > 0 ? oldBondLength / newBondLength : 1;
-  const scale = Math.min(Math.max(rawScale, 0.2), 5);
+  const oldCenter = getBoundsCenter(oldNodes);
+  const newCenter = getBoundsCenter(newNodes);
+  if (!oldCenter || !newCenter) return false;
 
-  const oldCenter = getCentroid(oldNodes);
-  const rawNewCenter = getCentroid(newNodes);
-  const newCenter = { x: rawNewCenter.x * scale, y: rawNewCenter.y * scale };
-  const offsetX = oldCenter.x - newCenter.x;
-  const offsetY = oldCenter.y - newCenter.y;
+  const newBondLength = getAverageBondLength(K, cleanedMolecule);
+  const rawScale = oldBondLength > 0 && newBondLength > 0 ? oldBondLength / newBondLength : 1;
+  // Both layouts sit within a small factor of each other; the clamp only guards
+  // against a degenerate backend block (zero or absurd bond lengths).
+  const scale =
+    Number.isFinite(rawScale) && rawScale > 0 ? Math.min(Math.max(rawScale, 0.2), 5) : 1;
+
+  const offsetX = oldCenter.x - newCenter.x * scale;
+  const offsetY = oldCenter.y - newCenter.y * scale;
 
   oldNodes.forEach((node, index) => {
     const coord = newNodes[index].getCoord2D?.(true);
@@ -1370,19 +1395,20 @@ export function createEditorBridge(
       );
       if (molecules.length === 0) return 0;
 
-      // Step 1: pack the scattered structures into tidy rows. This only moves
-      // whole structures around - no coordinates are recomputed, so the whole
-      // call stays cheap and needs no backend.
+      // Packing only moves whole structures around - no coordinates are
+      // recomputed, so the whole call stays cheap and needs no backend. The rows
+      // are laid out in the viewport's pixels at the current zoom.
       if (arrangeFragments(K, composer, editor)) {
         repaint();
+        // The arranged block is centred on the viewport already. Only the
+        // viewport may need a nudge (a surface resize can reset the scroll);
+        // scaling is never touched here - Clean Up rearranges, it does not
+        // rescale the picture. The surface itself is grown by
+        // notifyContentChanged() when the new rows poke out of it, so the
+        // drawing can never end up outside the painted area.
+        board.centerOnContentOffset({ x: 0, y: 0 });
       }
 
-      // Step 2: normalise the view around whatever is on the canvas now.
-      fitToView(K, composer, board, {
-        coverage: VIEW_FIT_COVERAGE,
-        maxZoom: MAX_ZOOM,
-        minZoom: MIN_ZOOM,
-      });
       repaint();
       board.notifyContentChanged();
 
@@ -1397,9 +1423,10 @@ export function createEditorBridge(
 
       try {
         for (const molecule of molecules) {
-          // Relayout keeps each structure's bond length; only the zoom is
-          // normalised afterwards.
-          const oldBondLength = getMedianBondLength(K, molecule);
+          // Relayout only regularises the bonds: the structure keeps its mean
+          // bond length and the position of its bounding-box centre.
+          const oldBondLength = getAverageBondLength(K, molecule);
+          const oldCenter = getBoundsCenter(molecule?.getNodes?.() ?? []);
           let cleaned = false;
 
           const molfile = K.IO.saveFormatData(molecule, 'mol');
@@ -1416,9 +1443,10 @@ export function createEditorBridge(
           }
 
           // 后端坐标与画布节点对不上（例如结构刚被改动）时，用纯 JS 布局兜底，
-          // 保证按钮不会因为一次取巧的失败而失效。
+          // 保证按钮不会因为一次取巧的失败而失效；兜底布局同样把结构留在原地。
           if (!cleaned) {
             layoutMolecule(K, molecule, oldBondLength);
+            moveMoleculeToCenter(molecule, oldCenter);
           }
         }
       } finally {

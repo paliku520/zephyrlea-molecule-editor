@@ -74,7 +74,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 双击面板的「…」（更多）按钮原本会弹出 Kekule 自带的周期表窗口，那套窗口不跟随应用的深色 / 浅色主题。`installPeriodicTablePicker()` 覆写 `StructureNodeSelectPanel._openPeriodicTableDialog`：普通元素选择改由 React 的自绘周期表接管（`PeriodicTableModal`），选中后仍走 Kekule 的 `doValueChanged()`，与原生流程一样落到 `applySetter`，因此就地替换、撤销都可以正常工作；只有「变量原子列表」（`isVarList` / `isVarNotList`）需要多选，继续沿用原生窗口。React 侧通过 `EditorBridgeCallbacks.onRequestElementPick` 拿到请求，没有监听者时自动回退原生窗口。
 - 「无限画布」：绘制面本身按视口的 4 倍展开（不小于 2600 渲染像素，单边最多 4608 渲染像素，避免多层 canvas 占用过多内存）。当平移靠近绘制面边界时，会把整幅结构整体挪回中央，并同步补偿滚动量，所以画面看起来完全不动，但可以一直朝任意方向平移；移动范围由结构本身兜底，结构永远不会被画到画布之外（多余空间会先自动扩大绘制面，达到上限后平移停在该方向）。
 - 缩放、双击缩放或手势缩放后，会把结构重新放回绘制面中央（同样补偿滚动），因此在任何缩放级别都能向上下左右继续平移。绘制面尺寸始终跟随缩放级别调整，既不会越界，也不会随缩放无限膨胀。
-- 缩放上下限写在 `src/lib/editorBoard.ts`（`MIN_ZOOM` / `MAX_ZOOM`），通过对 `editor.zoomTo` 的包装统一钳制，因此按钮、滚轮、手势、双击与程序化适配（整理 / 适应画布）都走同一套边界。
+- 缩放上下限写在 `src/lib/editorBoard.ts`（`MIN_ZOOM` / `MAX_ZOOM`），通过对 `editor.zoomTo` 的包装统一钳制，因此按钮、滚轮、手势、双击与程序化适配（适应画布、载入后自动适配）都走同一套边界；「整理视图」不再缩放，只按当前缩放把结构排成行列并居中（`editorBoard.centerOnContentOffset`），行宽以视口像素计算，宽度超过视口的单个结构独占一行。
 - 编辑器的 `change` 事件用于驱动 React 侧的「空画布提示」，Kekule 不管理宿主容器之外的任何 DOM。
 - 图片导出没有走「截屏」：`src/lib/moleculeExport.ts` 用 `ChemObjPainter2D` + `CanvasRendererBridge` 把整个 `ChemSpace` 根节点重新绘制一遍。先在临时画布上按 1× 渲染并扫描 alpha 得到真实墨水包围盒（Kekule 对 `ChemSpace` 根节点算不出 container box，因此边界由各分子的 `getContainerBox` 求并集给出，仅用于给测量画布定尺寸），再按同一偏移把绘制重放到裁好的画布上。SVG 借助 `svgcanvas` 把 Canvas2D 调用转译为 `<path>` / `<text>`；PNG 则由这份 SVG 以 2× 栅格化，两种格式因此完全一致。
 
@@ -117,7 +117,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 
 - 两者都走 `apps/web-local/src/lib/chemistryBackend.ts`：存在 Electron preload 桥时经 IPC，否则用探测到的 HTTP 地址；**没有任何 WASM 兜底**。探测不到时抛 `LocalEngineUnavailableError`（文案见上），由各处的 catch 直接显示。
 - 2D：`chem.generate_2d_molblock()` 解析结构（molblock 优先，保证原子顺序与编辑器节点一致）→ **清空所有原子坐标并删除构象** → `rdDepictor.Compute2DCoords()` → `Chem.WedgeMolBonds()` 补手性楔形键 → `MolToMolBlock()`。清坐标这一步不能省：编辑器传来的 molblock 一定带着当前画面的坐标，RDKit 在已有坐标时可能沿用它们，算出来的布局会歪。
-- 2D 回填：`editorBridge.relayout()` 与 `importSmiles()` 只请求本地 molblock；`applyCleanedLayout()` 把新结构按原键长缩放、按原重心对齐后逐个原子写回 Kekule 节点，原子数量或元素顺序对不上时视为失败，退回纯 JS 的 `layoutMolecule()`（整理结构按钮不会因此失效）。
+- 2D 回填：`editorBridge.relayout()` 与 `importSmiles()` 只请求本地 molblock；`applyCleanedLayout()` 先按「旧平均键长 / 新平均键长」求出缩放因子并把后端坐标整体缩放到用户原来画的键长，再用两侧包围盒中心之差把新坐标平移回原重心，最后逐个原子写回 Kekule 节点——因此整理只规整键长键角，结构的视觉大小与位置都不变；原子数量或元素顺序对不上时视为失败，退回纯 JS 的 `layoutMolecule()`（同样缩放到原键长并归位到原中心，整理结构按钮不会因此失效）。画布表面因新坐标越界（越过左 / 上边界）而扩张时，`editorBoard.fitSurfaceToContent()` 会同步平移视口，整块画面不会「跳」一下。
 - 3D：`chem.embed_3d()` 解析 → 清坐标 → `AddHs()` → `EmbedMolecule(randomSeed=42)`；失败时用 `useRandomCoords=True, maxAttempts=50` 再试一次 → `MMFFOptimizeMolecule(maxIters=500)`（缺 MMFF 参数时退回 UFF，两者都没有参数就直接用嵌入坐标）→ `RemoveHs()` → 多片段沿 x 轴排开（间距 4 Å、整体居中）→ `MolToMolBlock()`。
 - 嵌入失败（`EmbedMolecule` 返回 -1，例如 `C1CC2CC3CC4CC5CC1C2C3C45` 这类高张力笼状结构）不会让服务崩溃：`chem.ChemError` 携带 `code` + 中文说明，接口返回 422 `{"error": {"code", "message"}}`，主进程解析出 `error.message` 抛给渲染层，`chemistryBackend` 再剥掉 Electron 的 `Error invoking remote method '…'` 前缀，3D 弹窗直接显示这句话。
 - 接口：`POST /api/layout2d` → `{"molfile": "…"}`（解析失败返回 422）；`POST /api/embed3d` → `{"sdf": "…", "atomCount", "bondCount", "fragmentCount", "elapsedMs"}`（多返回的计数直接用于 3D 窗口标题，省一次解析）。

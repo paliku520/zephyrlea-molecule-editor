@@ -429,7 +429,7 @@ export function MoleculeEditor() {
     try {
       const zoomed = bridgeRef.current?.cleanUp() ?? 0;
       if (zoomed > 0) {
-        showToast({ kind: 'success', title: '视图已整理', detail: '结构已排布并缩放到约占画布 75%。' });
+        showToast({ kind: 'success', title: '视图已整理', detail: '结构已排成整齐的行并居中，画布缩放保持不变。' });
       } else {
         showToast({ kind: 'info', title: '画布上还没有结构' });
       }

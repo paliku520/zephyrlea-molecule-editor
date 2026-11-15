@@ -188,7 +188,7 @@ export function TopBar({
           type="button"
           onClick={onCleanUp}
           disabled={!ready || busy}
-          title="整理视图：把零散结构排成整齐的行，并缩放到约占画布 75%（不改动结构本身）"
+          title="整理视图：把零散结构排成整齐的行并居中（不改动结构本身，也不缩放画面）"
           className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-ink-soft transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
         >
           <Wand2 size={16} strokeWidth={1.7} />
