@@ -329,14 +329,17 @@ export function createEditorBoard(
     shiftView(stepX, stepY);
   };
 
-  const recenterIfNearEdge = () => {
-    if (disposed || performance.now() < settleUntil) return;
+  const recenterIfNearEdge = (force = false) => {
+    if (disposed) return;
+    if (!force && performance.now() < settleUntil) return;
 
     const scroller = getScroller();
     if (!scroller) return;
 
     const maxX = scroller.scrollWidth - scroller.clientWidth;
     const maxY = scroller.scrollHeight - scroller.clientHeight;
+    const triggerX = Math.max(MIN_RECENTER_PX * 2, scroller.clientWidth * EDGE_TRIGGER_RATIO);
+    const triggerY = Math.max(MIN_RECENTER_PX * 2, scroller.clientHeight * EDGE_TRIGGER_RATIO);
 
     const offsetToCenter = (scroll: number, max: number, trigger: number) => {
       if (max <= MIN_RECENTER_PX) return 0;
@@ -346,21 +349,33 @@ export function createEditorBoard(
       return Math.abs(delta) > MIN_RECENTER_PX ? delta : 0;
     };
 
-    const wantedX = offsetToCenter(
-      scroller.scrollLeft,
-      maxX,
-      Math.max(MIN_RECENTER_PX * 2, scroller.clientWidth * EDGE_TRIGGER_RATIO),
-    );
-    const wantedY = offsetToCenter(
-      scroller.scrollTop,
-      maxY,
-      Math.max(MIN_RECENTER_PX * 2, scroller.clientHeight * EDGE_TRIGGER_RATIO),
-    );
-    if (!wantedX && !wantedY) return;
+    const planShift = () => {
+      const wantedX = offsetToCenter(scroller.scrollLeft, maxX, triggerX);
+      const wantedY = offsetToCenter(scroller.scrollTop, maxY, triggerY);
+      if (!wantedX && !wantedY) return null;
 
-    const { dx, dy } = clampShiftToContent(wantedX, wantedY);
-    const stepX = Math.abs(dx) > MIN_RECENTER_PX ? dx : 0;
-    const stepY = Math.abs(dy) > MIN_RECENTER_PX ? dy : 0;
+      const { dx, dy } = clampShiftToContent(wantedX, wantedY);
+      const blocked =
+        Math.abs(wantedX - dx) > MIN_RECENTER_PX || Math.abs(wantedY - dy) > MIN_RECENTER_PX;
+
+      return { dx, dy, blocked };
+    };
+
+    let shift = planShift();
+    if (!shift) return;
+
+    // A drawing that drifted against a border clips every shift away, which used
+    // to stop panning for good (until a reload put the drawing back in the
+    // middle). Put it back in the middle first - the viewport follows, so the
+    // picture stays put - and re-plan the shift from the new scroll position.
+    if (shift.blocked) {
+      centerContentInArena();
+      shift = planShift();
+      if (!shift) return;
+    }
+
+    const stepX = Math.abs(shift.dx) > MIN_RECENTER_PX ? shift.dx : 0;
+    const stepY = Math.abs(shift.dy) > MIN_RECENTER_PX ? shift.dy : 0;
     if (!stepX && !stepY) return;
 
     shiftView(stepX, stepY);
@@ -476,6 +491,10 @@ export function createEditorBoard(
 
     pointerDown = false;
     scheduleContentFit();
+    // A pan can end with the viewport pressed against a border, where the
+    // scroller stops emitting events; hand the drawing its panning room back
+    // before the next gesture starts, so panning never stays stuck.
+    window.requestAnimationFrame(() => recenterIfNearEdge(true));
   };
 
   // Kekule can change the zoom on its own (double click, gestures). The surface
