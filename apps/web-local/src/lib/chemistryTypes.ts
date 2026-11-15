@@ -63,11 +63,19 @@ export interface StructureSource {
   molfile: string | null;
 }
 
-/** Reply of `/api/embed3d`: one SDF molblock plus the counts the viewer shows. */
+/** Reply of `/api/embed3d`: two molblocks plus the counts the viewer shows. */
 export interface Embed3DResult {
+  /** Heavy-atom conformer; what the viewer draws by default. */
   sdf: string;
+  /** Same conformer with every explicit hydrogen kept (`AddHs` output). */
+  sdfWithHydrogens: string;
   atomCount: number;
   bondCount: number;
+  /** Counts of `sdfWithHydrogens`; shown when hydrogen display is switched on. */
+  atomCountWithHydrogens: number;
+  bondCountWithHydrogens: number;
+  /** Explicit hydrogens the engine placed (difference between the two variants). */
+  hydrogenCount: number;
   fragmentCount: number;
   elapsedMs: number;
 }

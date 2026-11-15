@@ -280,8 +280,8 @@ def _separate_fragments(mol: Chem.Mol) -> None:
         conformer.SetAtomPosition(index, Geometry.Point3D(position.x + shift, position.y, position.z))
 
 
-def _embed_3d(smiles: str, molfile: str | None) -> tuple[str, dict]:
-    """生成 3D 构象，返回 (molblock, 统计信息)。"""
+def _embed_3d(smiles: str, molfile: str | None) -> tuple[str, str, dict]:
+    """生成 3D 构象，返回 (重原子 molblock, 含氢 molblock, 统计信息)。"""
     started = time.perf_counter()
 
     mol = _parse_for_layout(smiles, molfile)
@@ -307,29 +307,36 @@ def _embed_3d(smiles: str, molfile: str | None) -> tuple[str, dict]:
         )
 
     _optimize_with_force_field(mol)
-    # 显式氢只用于嵌入与优化，输出前移除，界面按重原子渲染
-    mol = Chem.RemoveHs(mol)
+    # 片段排开先作用在含氢模型上，随后再删氢；两种输出因此共用同一套坐标，
+    # 界面切换「显示氢原子」时骨架不会跳动。
     _separate_fragments(mol)
+    mol_with_hydrogens = mol
+    # 重原子版本沿用原有输出（界面默认按重原子渲染）
+    mol = Chem.RemoveHs(mol_with_hydrogens)
+    molblock_with_hydrogens = Chem.MolToMolBlock(mol_with_hydrogens)
 
     fragment_count = len(Chem.GetMolFrags(mol))
     stats = {
         "atomCount": mol.GetNumAtoms(),
         "bondCount": mol.GetNumBonds(),
+        "atomCountWithHydrogens": mol_with_hydrogens.GetNumAtoms(),
+        "bondCountWithHydrogens": mol_with_hydrogens.GetNumBonds(),
+        "hydrogenCount": mol_with_hydrogens.GetNumAtoms() - mol.GetNumAtoms(),
         "fragmentCount": fragment_count,
         "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
     }
 
-    return Chem.MolToMolBlock(mol), stats
+    return Chem.MolToMolBlock(mol), molblock_with_hydrogens, stats
 
 
 def generate_3d_sdf(smiles: str, molfile: str | None) -> str:
-    """生成 3D 构象并以 MOL block（SDF 单分子）形式返回，失败抛 ChemError。"""
-    molblock, _ = _embed_3d(smiles, molfile)
+    """生成 3D 构象并以 MOL block（SDF 单分子，仅重原子）形式返回，失败抛 ChemError。"""
+    molblock, _, _ = _embed_3d(smiles, molfile)
     return molblock
 
 
 def embed_3d(smiles: str, molfile: str | None) -> dict:
     """3D 构象 + 渲染所需的计数，供 `/api/embed3d` 直接返回。"""
-    molblock, stats = _embed_3d(smiles, molfile)
-    return {"sdf": molblock, **stats}
+    molblock, molblock_with_hydrogens, stats = _embed_3d(smiles, molfile)
+    return {"sdf": molblock, "sdfWithHydrogens": molblock_with_hydrogens, **stats}
 

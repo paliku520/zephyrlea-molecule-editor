@@ -163,35 +163,32 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
           <div className="mx-3 h-px bg-line" />
 
           <SettingRow
+            title="3D 显示氢原子"
+            description="3D 视图画出氢原子。"
+            hint="3D 构象由显式氢参与计算，默认显示每个碳、氮、氧上连着的氢；关掉后只画重原子骨架。3D 窗口底部工具栏里的 H 按钮可以随时切换。"
+            control={
+              <SwitchButton
+                label="3D 显示氢原子"
+                checked={settings.show3DHydrogens}
+                onChange={(show3DHydrogens) => onChange({ ...settings, show3DHydrogens })}
+              />
+            }
+          />
+
+          <div className="mx-3 h-px bg-line" />
+
+          <SettingRow
             title="隐藏碳/氢原子"
             description="骨架式绘制。"
             hint="开启后碳原子不标注、氢原子仅在需要时显示；关闭后显示全部原子与氢的数量。"
             control={
-              <button
-                type="button"
-                role="switch"
-                aria-checked={settings.hideCarbonHydrogenAtoms}
-                aria-label="隐藏碳/氢原子"
-                onClick={() =>
-                  onChange({
-                    ...settings,
-                    hideCarbonHydrogenAtoms: !settings.hideCarbonHydrogenAtoms,
-                  })
+              <SwitchButton
+                label="隐藏碳/氢原子"
+                checked={settings.hideCarbonHydrogenAtoms}
+                onChange={(hideCarbonHydrogenAtoms) =>
+                  onChange({ ...settings, hideCarbonHydrogenAtoms })
                 }
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-150 ${
-                  settings.hideCarbonHydrogenAtoms
-                    ? 'border-transparent bg-accent'
-                    : 'border-line-strong bg-hover-strong'
-                }`}
-              >
-                <span
-                  className={`h-4 w-4 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition-transform duration-150 ${
-                    settings.hideCarbonHydrogenAtoms
-                      ? 'translate-x-[25px] bg-white'
-                      : 'translate-x-[3px] bg-ink-muted'
-                  }`}
-                />
-              </button>
+              />
             }
           />
 
@@ -223,6 +220,34 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
         </div>
       </div>
     </div>
+  );
+}
+
+interface SwitchButtonProps {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+/** Pill switch shared by the boolean settings rows. */
+function SwitchButton({ label, checked, onChange }: SwitchButtonProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-150 ${
+        checked ? 'border-transparent bg-accent' : 'border-line-strong bg-hover-strong'
+      }`}
+    >
+      <span
+        className={`h-4 w-4 rounded-full shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition-transform duration-150 ${
+          checked ? 'translate-x-[25px] bg-white' : 'translate-x-[3px] bg-ink-muted'
+        }`}
+      />
+    </button>
   );
 }
 

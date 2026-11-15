@@ -45,6 +45,8 @@ export interface AppSettings {
   toolbarPlacement: ToolbarPlacement;
   model3DStyle: Model3DStyle;
   viewer3DToolbarAlign: Viewer3DToolbarAlign;
+  /** Draw the explicit hydrogens the 3D engine placed instead of heavy atoms only. */
+  show3DHydrogens: boolean;
 }
 
 export const SETTINGS_STORAGE_KEY = 'zephyrlea.settings';
@@ -55,6 +57,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   toolbarPlacement: 'bottom',
   model3DStyle: 'ball-stick',
   viewer3DToolbarAlign: 'center',
+  show3DHydrogens: true,
 };
 
 const THEME_BACKGROUND: Record<ThemeMode, string> = {
@@ -83,6 +86,10 @@ export function normalizeSettings(value: unknown): AppSettings {
     )
       ? (raw.viewer3DToolbarAlign as Viewer3DToolbarAlign)
       : DEFAULT_SETTINGS.viewer3DToolbarAlign,
+    show3DHydrogens:
+      typeof raw.show3DHydrogens === 'boolean'
+        ? raw.show3DHydrogens
+        : DEFAULT_SETTINGS.show3DHydrogens,
   };
 }
 

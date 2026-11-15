@@ -12,6 +12,9 @@ interface Viewer3DToolbarProps {
   onModelStyleChange: (style: Model3DStyle) => void;
   dragMode: Viewer3DDragMode;
   onDragModeChange: (mode: Viewer3DDragMode) => void;
+  /** Whether the model on screen includes the explicit hydrogens. */
+  showHydrogens: boolean;
+  onToggleHydrogens: () => void;
   onResetView: () => void;
   /** Save the current 3D canvas as a PNG. */
   onScreenshot: () => void;
@@ -38,12 +41,14 @@ export const VIEWER_3D_DRAG_CHOICES: IconRadioOption<Viewer3DDragMode>[] =
     icon: DRAG_ICONS[option.value],
   }));
 
-/** Single docked pill: model style, drag mode, divider, reset view, screenshot, maximize. */
+/** Single docked pill: model style, hydrogens, drag mode, divider, actions. */
 export function Viewer3DToolbar({
   modelStyle,
   onModelStyleChange,
   dragMode,
   onDragModeChange,
+  showHydrogens,
+  onToggleHydrogens,
   onResetView,
   onScreenshot,
   maximized,
@@ -58,6 +63,22 @@ export function Viewer3DToolbar({
         options={MODEL_3D_STYLE_CHOICES}
         onChange={onModelStyleChange}
       />
+
+      <button
+        type="button"
+        onClick={onToggleHydrogens}
+        disabled={!ready}
+        aria-pressed={showHydrogens}
+        aria-label={showHydrogens ? '隐藏氢原子' : '显示氢原子'}
+        title={showHydrogens ? '隐藏氢原子：只保留重原子骨架' : '显示氢原子：画出构象里的全部氢'}
+        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11.5px] font-semibold leading-none transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+          showHydrogens
+            ? 'bg-pill text-pill-ink shadow-[0_1px_2px_var(--shell-shadow)]'
+            : 'text-ink-muted hover:bg-hover hover:text-ink'
+        }`}
+      >
+        H
+      </button>
 
       <span className="mx-0.5 h-5 w-px bg-line" />
 

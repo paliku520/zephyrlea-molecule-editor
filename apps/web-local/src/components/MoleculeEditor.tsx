@@ -781,6 +781,10 @@ export function MoleculeEditor() {
         modelStyle={settings.model3DStyle}
         onModelStyleChange={(model3DStyle) => setSettings((current) => ({ ...current, model3DStyle }))}
         toolbarAlign={settings.viewer3DToolbarAlign}
+        showHydrogens={settings.show3DHydrogens}
+        onShowHydrogensChange={(show3DHydrogens) =>
+          setSettings((current) => ({ ...current, show3DHydrogens }))
+        }
         onNotice={showToast}
         onClose={() => setViewer3DOpen(false)}
       />

@@ -26,6 +26,9 @@ interface Viewer3DModalProps {
   modelStyle: Model3DStyle;
   onModelStyleChange: (style: Model3DStyle) => void;
   toolbarAlign: Viewer3DToolbarAlign;
+  /** Draw the explicit hydrogens instead of the heavy-atom skeleton. */
+  showHydrogens: boolean;
+  onShowHydrogensChange: (show: boolean) => void;
   /** Surface a short confirmation (screenshot saved, failure) to the shell. */
   onNotice?: (notice: { kind: 'success' | 'error'; title: string; detail?: string }) => void;
   onClose: () => void;
@@ -89,6 +92,27 @@ function resetView(viewer: GLViewer, style: Model3DStyle) {
   viewer.render();
 }
 
+/**
+ * Loads one variant of the conformer — heavy atoms only, or with every explicit
+ * hydrogen — and frames it. Both molblocks come from the same embedding, so a
+ * swap keeps the geometry and only adds / removes the hydrogens.
+ */
+function buildConformerModel(
+  viewer: GLViewer,
+  conformer: Conformer3D,
+  showHydrogens: boolean,
+  style: Model3DStyle,
+) {
+  viewer.removeAllModels();
+  viewer.addModel(
+    showHydrogens ? conformer.molblockWithHydrogens : conformer.molblock,
+    'sdf',
+  );
+  viewer.setStyle({}, MODEL_STYLE_SPECS[style]);
+  fitView(viewer, style);
+  viewer.render();
+}
+
 const VIEWER_BACKGROUND: Record<ThemeMode, string> = {
   dark: '#171717',
   light: '#ffffff',
@@ -124,6 +148,8 @@ export function Viewer3DModal({
   modelStyle,
   onModelStyleChange,
   toolbarAlign,
+  showHydrogens,
+  onShowHydrogensChange,
   onNotice,
   onClose,
 }: Viewer3DModalProps) {
@@ -133,6 +159,10 @@ export function Viewer3DModal({
   themeRef.current = theme;
   const modelStyleRef = useRef(modelStyle);
   modelStyleRef.current = modelStyle;
+  const showHydrogensRef = useRef(showHydrogens);
+  showHydrogensRef.current = showHydrogens;
+  /** Variant currently on screen; `null` before the first model is added. */
+  const shownHydrogensRef = useRef<boolean | null>(null);
 
   const [stage, setStage] = useState<Stage>('loading');
   const [conformer, setConformer] = useState<Conformer3D | null>(null);
@@ -291,6 +321,7 @@ export function Viewer3DModal({
     const disposeViewer = () => {
       const viewer = viewerRef.current;
       viewerRef.current = null;
+      shownHydrogensRef.current = null;
       if (!viewer) return;
 
       try {
@@ -317,10 +348,8 @@ export function Viewer3DModal({
         });
 
         viewerRef.current = viewer;
-        viewer.addModel(result.molblock, 'sdf');
-        viewer.setStyle({}, MODEL_STYLE_SPECS[modelStyleRef.current]);
-        fitView(viewer, modelStyleRef.current);
-        viewer.render();
+        buildConformerModel(viewer, result, showHydrogensRef.current, modelStyleRef.current);
+        shownHydrogensRef.current = showHydrogensRef.current;
 
         setConformer(result);
         setStage('ready');
@@ -360,6 +389,17 @@ export function Viewer3DModal({
     viewer.setBackgroundColor(VIEWER_BACKGROUND[theme], 1);
     viewer.render();
   }, [theme, stage]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !conformer || stage !== 'ready') return;
+    // The model is rebuilt only when the switch actually differs from what is
+    // on screen, so opening the dialog with hydrogens enabled does not reload.
+    if (shownHydrogensRef.current === showHydrogens) return;
+
+    buildConformerModel(viewer, conformer, showHydrogens, modelStyleRef.current);
+    shownHydrogensRef.current = showHydrogens;
+  }, [showHydrogens, conformer, stage]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -407,7 +447,9 @@ export function Viewer3DModal({
             {conformer && (
               <span className="mr-1.5 hidden text-[11px] text-ink-faint sm:inline">
                 {conformer.fragmentCount > 1 && `${conformer.fragmentCount} 个结构 · `}
-                {conformer.atomCount} 个原子 · {conformer.bondCount} 根键
+                {showHydrogens ? conformer.atomCountWithHydrogens : conformer.atomCount} 个原子 ·{' '}
+                {showHydrogens ? conformer.bondCountWithHydrogens : conformer.bondCount} 根键
+                {showHydrogens && conformer.hydrogenCount > 0 && `（含 ${conformer.hydrogenCount} 个氢）`}
               </span>
             )}
 
@@ -488,6 +530,8 @@ export function Viewer3DModal({
               onModelStyleChange={onModelStyleChange}
               dragMode={dragMode}
               onDragModeChange={setDragMode}
+              showHydrogens={showHydrogens}
+              onToggleHydrogens={() => onShowHydrogensChange(!showHydrogens)}
               onResetView={handleResetView}
               onScreenshot={handleScreenshot}
               maximized={maximized}
