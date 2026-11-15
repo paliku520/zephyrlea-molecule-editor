@@ -6,7 +6,8 @@
 
 - 由 React 挂载的全屏 Kekule `Composer`，并隐藏 Kekule 自带的全部工具栏。
 - 使用 React + Tailwind 自绘顶栏、元素快捷条与左侧垂直工具栏。
-- **页眉**：最上方是一条固定页眉，左侧是产品名 `ZephyrLea's Molecular Editor`、紧随其后的版本徽标（`v0.1.0`）与「关于」按钮，右侧是跳转 GitHub 仓库（`paliku520/zephyrlea-molecule-editor`，新标签页打开）的按钮；页眉常驻顶部，不受工具栏「顶部 / 底部」设置影响。
+- **页眉**：最上方是一条固定页眉，左侧是应用图标与产品名 `ZephyrLea's Molecular Editor`、紧随其后的版本徽标（`v0.1.0`）与「关于」按钮，右侧是跳转 GitHub 仓库（`paliku520/zephyrlea-molecule-editor`，新标签页打开）的按钮；页眉常驻顶部，不受工具栏「顶部 / 底部」设置影响。
+- **自绘窗口边框**（桌面版）：桌面外壳以无边框窗口启动，系统标题栏和原生最小化 / 最大化 / 关闭按钮全部去掉，改由页眉右侧自绘的三个按钮代替——悬停时最小化 / 最大化是浅色高亮底，关闭是 Windows 标志性的红底白叉，最大化后切换成「向下还原」图标。页眉空白处就是标题栏拖动区（双击最大化 / 还原），日志窗口的标题栏同样自绘并显示应用图标。浏览器版不出现窗口按钮，页眉保持原样。
 - **版本号**：唯一的来源是 `apps/web-local/src/lib/version.ts` 的 `APP_VERSION`——页眉徽标、关于弹窗副标题直接引用它，浏览器标签页标题则由 `apps/web-local/vite.config.ts` 在构建 / 开发时把 `apps/web-local/index.html` 里的 `__APP_VERSION__` 占位符替换掉，因此标题在页面脚本执行前就是正确的。发版时用 `python scripts/bump_version.py <版本号>` 一次性同步 `apps/desktop/package.json`、`apps/web-local/package.json` 与 `apps/web-local/src/lib/version.ts` 里的版本。
 - **关于窗口**：「关于」按钮打开关于弹窗，内容包括产品简介、**主要能力**（绘制 / 分析 / 导出 / 三维）、核心技术栈、MIT 开源协议（点「查看完整协议」可在页面内直接阅读 `LICENSE` 全文，无需跳转）与作者信息；底部除了 GitHub 仓库链接，还提供「使用说明与部署教程」与「免责声明」入口。`Esc`、遮罩与「关闭」都能关掉它。
 - **画布免责声明**：2D 画板左下角常驻一行浅色小字「仅供教学与学习参考，请勿用于非法用途」。它不接收鼠标事件、不挡住绘制与框选，缩放或平移画布时也固定在左下角；完整条款见 [DISCLAIMER.md](../DISCLAIMER.md)。

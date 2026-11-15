@@ -38,6 +38,17 @@ export interface DesktopBackendHealth {
   pid: number;
 }
 
+/** Window buttons drawn by the renderer, since the desktop shell has no frame. */
+interface DesktopWindowControls {
+  minimize(): Promise<void>;
+  /** Resolves to the state the window is switching to. */
+  toggleMaximize(): Promise<boolean>;
+  close(): Promise<void>;
+  isMaximized(): Promise<boolean>;
+  /** Returns the unsubscribe function. */
+  onMaximizeChange(callback: (maximized: boolean) => void): () => void;
+}
+
 /** API the Electron preload script exposes on `window.zephyrlea`. */
 interface DesktopBridge {
   platform: string;
@@ -48,6 +59,7 @@ interface DesktopBridge {
     embed3d(source: StructureSource): Promise<Embed3DResult>;
   };
   saveFile(request: DesktopSaveRequest): Promise<DesktopSaveResult>;
+  window: DesktopWindowControls;
   logs: {
     /** Opens (or focuses) the system log window. */
     open(): Promise<void>;

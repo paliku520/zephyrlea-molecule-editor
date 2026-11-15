@@ -46,6 +46,19 @@ const bridge = {
     },
   },
   saveFile: (request: SaveRequest) => ipcRenderer.invoke('file:save', request),
+  // 无边框窗口：自绘的最小化 / 最大化 / 关闭按钮走这里。
+  window: {
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize') as Promise<boolean>,
+    close: () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:is-maximized') as Promise<boolean>,
+    /** Subscribes to maximize / restore changes and returns the unsubscribe function. */
+    onMaximizeChange: (callback: (maximized: boolean) => void) => {
+      const handler = (_event: unknown, maximized: boolean) => callback(maximized);
+      ipcRenderer.on('window:maximize-changed', handler);
+      return () => ipcRenderer.off('window:maximize-changed', handler);
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('zephyrlea', bridge);

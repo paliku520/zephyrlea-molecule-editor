@@ -1,7 +1,11 @@
 import { writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron';
-import type { BrowserWindowConstructorOptions, SaveDialogOptions } from 'electron';
+import type {
+  BrowserWindowConstructorOptions,
+  IpcMainInvokeEvent,
+  SaveDialogOptions,
+} from 'electron';
 import { LocalBackend } from './backend';
 import { Logger, type LogLevel } from './logger';
 import { runSelfTest } from './self-test';
@@ -9,6 +13,7 @@ import { runSelfTest } from './self-test';
 const logger = new Logger();
 const backend = new LocalBackend(logger);
 const SELF_TEST = process.argv.includes('--self-test');
+const IS_MAC = process.platform === 'darwin';
 
 /** Only one system log window is ever open; further requests just focus it. */
 let logsWindow: BrowserWindow | null = null;
@@ -44,6 +49,11 @@ function windowOptions(): BrowserWindowConstructorOptions {
     backgroundColor: '#151516',
     show: false,
     autoHideMenuBar: true,
+    // 无边框窗口：系统标题栏和最小化 / 最大化 / 关闭按钮全部去掉，改由渲染层自绘。
+    // macOS 例外，用 hiddenInset 保留系统红绿灯（它们浮在页面内容左上角）。
+    ...(IS_MAC
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 14 } }
+      : { frame: false }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -51,6 +61,25 @@ function windowOptions(): BrowserWindowConstructorOptions {
       sandbox: true,
     },
   };
+}
+
+/**
+ * 无原生标题栏后，最大化状态的变化只能靠主进程通知渲染层，
+ * 自绘按钮据此在「最大化」和「向下还原」之间切换图标。
+ */
+function bindWindowState(window: BrowserWindow): void {
+  const broadcast = () => {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send('window:maximize-changed', window.isMaximized());
+  };
+
+  window.on('maximize', broadcast);
+  window.on('unmaximize', broadcast);
+}
+
+/** 窗口按钮的 IPC 一律作用于事件来源窗口，主窗口和日志窗口互不影响。 */
+function windowFrom(event: IpcMainInvokeEvent): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(event.sender);
 }
 
 /**
@@ -110,6 +139,7 @@ function createMainWindow(): BrowserWindow {
 
   openLinksExternally(window);
   bindLogShortcut(window);
+  bindWindowState(window);
   loadRenderer(window);
   logger.info('main', '主窗口已创建');
 
@@ -144,6 +174,7 @@ function openLogsWindow(): void {
 
   openLinksExternally(window);
   bindLogShortcut(window);
+  bindWindowState(window);
   loadRenderer(window, { window: 'logs' });
   logger.info('main', '系统日志窗口已打开');
 }
@@ -200,6 +231,28 @@ function registerIpc(): void {
   ipcMain.handle('window:open-logs', () => openLogsWindow());
   ipcMain.handle('logs:history', () => logger.history());
   ipcMain.handle('logs:clear', () => logger.clear());
+
+  ipcMain.handle('window:minimize', (event) => {
+    windowFrom(event)?.minimize();
+  });
+
+  // 返回切换后的目标状态：Windows 的最大化是异步生效的，`isMaximized()`
+  // 在本次调用里未必已经翻转，渲染层用它先乐观更新按钮图标。
+  ipcMain.handle('window:toggle-maximize', (event) => {
+    const target = windowFrom(event);
+    if (!target) return false;
+
+    const maximize = !target.isMaximized();
+    if (maximize) target.maximize();
+    else target.unmaximize();
+    return maximize;
+  });
+
+  ipcMain.handle('window:close', (event) => {
+    windowFrom(event)?.close();
+  });
+
+  ipcMain.handle('window:is-maximized', (event) => windowFrom(event)?.isMaximized() ?? false);
 
   // 渲染层用 send 上报 console.warn / console.error；参数来自页面，先收敛再入库。
   ipcMain.on('log:report', (_event, report: RendererLogReport) => {

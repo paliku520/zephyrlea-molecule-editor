@@ -142,6 +142,20 @@ input {
   font: inherit;
 }
 
+/* ---------------------------------------------------------------------------
+   Self-drawn window chrome
+   The desktop shell runs frameless (Electron `frame: false`), so the page marks
+   which areas drag the window and which stay clickable. Inert in a browser.
+   --------------------------------------------------------------------------- */
+
+.window-drag {
+  -webkit-app-region: drag;
+}
+
+.window-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 .dot-grid {
   background-color: var(--shell-canvas);
   background-image: radial-gradient(circle, var(--shell-dot) 1px, transparent 1px);

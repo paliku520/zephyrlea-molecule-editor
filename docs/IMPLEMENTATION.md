@@ -27,7 +27,9 @@ apps/web-local/src/lib/consoleLogs.ts           console.warn / error 转发到�
 apps/web-local/src/components/LogsWindow.tsx    日志控制台窗口（?window=logs）
 apps/web-local/public/vendor/kekule/       Kekule.js 1.0.4 官方 dist 包与主题 CSS 的本地副本（MIT）
 src/components/             React 外壳：顶栏、工具栏、元素条、编辑器
-src/components/AppHeader.tsx  页眉：标题、关于入口与 GitHub 仓库跳转
+src/components/AppHeader.tsx  页眉 / 标题栏：应用图标、标题、关于入口、GitHub 仓库跳转与自绘窗口按钮
+src/components/WindowControls.tsx  自绘的最小化 / 最大化 / 关闭按钮与无边框窗口探测
+src/components/icons/AppMark.tsx   页眉应用图标（复用 public/favicon.svg）
 src/components/AboutModal.tsx 关于弹窗：简介、技术栈、MIT 协议全文与作者（`LICENSE?raw` 内联）
 src/components/icons/       自定义 SVG 化学图标
 src/lib/editorBridge.ts     Kekule Composer 生命周期、工具切换、SMILES 读写、自适应视图
@@ -106,9 +108,12 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - Python 服务由 `LocalBackend` 拉起：`apps/backend/main.py` 先自己 `bind` 一个端口（默认 `--port 0` 交给系统分配），在 stdout 打印唯一一行 `ZEPHYRLEA_BACKEND_READY <port>`，主进程解析这一行拿到端口，再用 `/health` 轮询到就绪。异常退出会把 `starting` 清空，下次调用会重新拉起。
 - 认证用的 token 由主进程用 `randomBytes` 生成，通过环境变量 `ZEPHYRLEA_BACKEND_TOKEN` 传给子进程；服务端中间件校验 `x-zephyrlea-token`，缺失或不匹配一律 401。服务只监听 `127.0.0.1`，不暴露文档路由（`docs_url` / `openapi_url` 均为 `None`）。
 - 子进程的 stdin 由主进程持有，并传 `--watch-stdin`：stdin 一旦关闭（Electron 退出、崩溃），服务立即 `os._exit(0)`，不会留下孤儿进程；`will-quit` 时也会主动结束子进程。
-- IPC 共五条：`chemistry:analyze`（→ `/analyze`）、`chemistry:layout2d`（→ `/api/layout2d`）、`chemistry:embed3d`（→ `/api/embed3d`，超时放宽到 120s）、`backend:health`（→ `/health`）、`file:save`（原生另存）。渲染层通过 preload 暴露的 `window.zephyrlea` 调用；没有该对象时只能用 `window.__zephyrleaBackendUrl` / `VITE_ZEPHYRLEA_BACKEND` 指定的 HTTP 地址，两者都没有就统一报「未连接本地计算引擎」。
+- 窗口是无边框的：`windowOptions()` 在 Windows / Linux 上用 `frame: false` 连系统标题栏与边框一起去掉，macOS 改用 `titleBarStyle: 'hiddenInset'` 保留系统红绿灯（页眉相应左移 88px 避让）。渲染层用 `.window-drag` / `.window-no-drag` 两个类划分拖动区——页眉本身是拖动区，按钮、链接与版本徽标标为 `no-drag`；于是拖动、双击最大化全部由系统按标题栏处理（`WM_NCHITTEST` 返回 `HTCAPTION`），页面里不需要任何手势代码，按钮之外的整条页眉都是可拖动的。
+- 自绘按钮通过四条 IPC 驱动真实窗口：`window:minimize`、`window:toggle-maximize`（返回切换后的目标状态）、`window:close`、`window:is-maximized`，事件来源决定操作哪个窗口，主窗口与日志窗口互不影响。最大化 / 还原后主进程广播 `window:maximize-changed`，按钮据此在「最大化」与「向下还原」之间换图标；Windows 的最大化是异步生效的，所以渲染层先按 IPC 返回值乐观更新，再以广播为准。10×10 的细线图标是内联 SVG，不依赖系统字体（`Segoe MDL2 Assets` 只在 Windows 上有）。
+- 窗口图标：页眉与日志窗口标题栏都用 `public/favicon.svg` 显示应用图标，与浏览器标签页同一份文件；React 里必须写相对路径 `favicon.svg`——打包后页面走 `file://`，以 `/` 开头会被解析到磁盘根目录而不是 renderer 目录。
+- 业务 IPC 五条：`chemistry:analyze`（→ `/analyze`）、`chemistry:layout2d`（→ `/api/layout2d`）、`chemistry:embed3d`（→ `/api/embed3d`，超时放宽到 120s）、`backend:health`（→ `/health`）、`file:save`（原生另存）。渲染层通过 preload 暴露的 `window.zephyrlea` 调用；没有该对象时只能用 `window.__zephyrleaBackendUrl` / `VITE_ZEPHYRLEA_BACKEND` 指定的 HTTP 地址，两者都没有就统一报「未连接本地计算引擎」。
 - 导出改为原生对话框：`saveExportedFile()` 在有桥时把 Blob 转成 `ArrayBuffer`、把 `data:` URL 解码成字节后经 `file:save` 交给主进程写盘，用户取消返回 `false`，界面不再提示「已导出」；浏览器版仍然走 `<a download>`。
-- `apps/desktop/src/main/self-test.ts` 提供 `electron . --self-test`（`npm run smoke:desktop`）：依次断言 preload 已注入、`/health` 经 IPC 连通、五价碳能返回 `AtomValenceException`、`layout2d` 返回 13 个原子的 V2000 molblock、`embed3d` 双结构返回 9 原子 / 2 片段且 z 方向有展开、非法结构给出中文提示、界面载入 `CCO` 后显示 `C2H6O` 并完成「整理结构」且**没有**请求 `RDKit_minimal.wasm` / `openchemlib` 代码块、3D 弹窗能用后端构象渲染出模型，全过退出码 0，便于 CI 把关。
+- `apps/desktop/src/main/self-test.ts` 提供 `electron . --self-test`（`npm run smoke:desktop`）：依次断言 preload 已注入、`/health` 经 IPC 连通、五价碳能返回 `AtomValenceException`、`layout2d` 返回 13 个原子的 V2000 molblock、`embed3d` 双结构返回 9 原子 / 2 片段且 z 方向有展开、非法结构给出中文提示、界面载入 `CCO` 后显示 `C2H6O` 并完成「整理结构」且**没有**请求 `RDKit_minimal.wasm` / `openchemlib` 代码块、3D 弹窗能用后端构象渲染出模型、页眉里有 3 个 `data-window-control` 按钮且 `window:toggle-maximize` 真的把窗口最大化了（随后还原），全过退出码 0，便于 CI 把关。
 - 打包路径已按「先 PyInstaller、再安装包」预留：`app.isPackaged` 时主进程从 `process.resourcesPath/backend/zephyrlea-backend.exe` 启动服务，开发期则用 `apps/backend/.venv/Scripts/python.exe`，也可用 `ZEPHYRLEA_PYTHON` 指定解释器。
 - Electron 固定 `31.7.7`：44 / 45 在这台 Windows 10 上启动即崩（`0xC0000005`），31.7.7 正常。electron-vite 需要在**仓库根**解析 `electron/package.json`（monorepo 下它按自身路径 `require.resolve`），所以 `electron` 声明在根 `package.json` 的 `devDependencies`，`allowScripts` 放行其 postinstall 以取得二进制。
 - 本轮迁移了「分子分析 / 结构校验 / 2D 坐标生成 / 3D 构象生成」四条链路，并删除了前端全部 WASM 引擎；C++ 扩展与 PyInstaller 打包仍待后续。

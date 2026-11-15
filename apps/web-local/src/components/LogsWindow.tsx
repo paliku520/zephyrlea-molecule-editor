@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownToLine, Clipboard, Eraser, Terminal } from 'lucide-react';
+import { ArrowDownToLine, Clipboard, Eraser } from 'lucide-react';
+import { AppMark } from './icons/AppMark';
+import { WindowControls, useWindowChrome } from './WindowControls';
 import { desktopBridge, type LogEntry, type LogLevel } from '../lib/desktop';
 
 /** Hard cap on rendered rows: older entries are dropped from the head. */
@@ -86,6 +88,7 @@ function appendEntries(current: LogEntry[], incoming: LogEntry[]): LogEntry[] {
 
 export function LogsWindow() {
   const bridge = desktopBridge();
+  const { isDesktop, isMac } = useWindowChrome();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [levelFilter, setLevelFilter] = useState<LevelFilter>('all');
@@ -151,34 +154,45 @@ export function LogsWindow() {
 
   return (
     <div className="flex h-screen flex-col bg-canvas text-ink">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+      {/* 无边框窗口的标题栏：可拖动，右侧是自绘的窗口按钮。 */}
+      <header
+        className={`flex h-9 shrink-0 select-none items-center gap-2 border-b border-line bg-panel ${
+          !isDesktop ? 'px-3' : isMac ? 'pl-[88px] pr-3' : 'pl-3 pr-0'
+        } ${isDesktop ? 'window-drag' : ''}`}
+      >
+        <AppMark className="h-4 w-4 shrink-0 rounded-[4px]" />
+
         <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink">
-          <Terminal size={15} strokeWidth={2} />
           系统日志
         </span>
         <span className="rounded-full bg-hover px-2 py-0.5 text-[11px] text-ink-muted">
           {visible.length} / {entries.length} 条
         </span>
 
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center rounded-md border border-line-strong p-0.5">
-            {LEVEL_FILTERS.map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                onClick={() => setLevelFilter(filter.value)}
-                aria-pressed={levelFilter === filter.value}
-                className={`h-6 rounded px-2 text-[11px] font-semibold transition-colors ${
-                  levelFilter === filter.value
-                    ? FILTER_ACTIVE[filter.value]
-                    : 'text-ink-muted hover:text-ink'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+        <span className="flex-1" />
+        <WindowControls />
+      </header>
 
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
+        <div className="flex items-center rounded-md border border-line-strong p-0.5">
+          {LEVEL_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              onClick={() => setLevelFilter(filter.value)}
+              aria-pressed={levelFilter === filter.value}
+              className={`h-6 rounded px-2 text-[11px] font-semibold transition-colors ${
+                levelFilter === filter.value
+                  ? FILTER_ACTIVE[filter.value]
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             role="switch"

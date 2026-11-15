@@ -257,6 +257,26 @@ export async function runSelfTest(
       },
     },
     {
+      name: 'self-drawn window controls drive the frameless window',
+      run: async () => {
+        const dom = await evaluate<{ controls: number; dragRegion: boolean }>(`(() => ({
+          controls: document.querySelectorAll('[data-window-control]').length,
+          dragRegion: Boolean(document.querySelector('.window-drag')),
+        }))()`);
+
+        const maximizeState = await evaluate<boolean>('window.zephyrlea.window.toggleMaximize()');
+        await delay(600);
+        const maximized = window.isMaximized();
+
+        await evaluate('window.zephyrlea.window.toggleMaximize()');
+        await delay(600);
+        const restored = window.isMaximized();
+
+        log(`  window: ${JSON.stringify({ ...dom, maximizeState, maximized, restored })}`);
+        return dom.controls === 3 && dom.dragRegion && maximizeState && maximized && !restored;
+      },
+    },
+    {
       name: 'log window opens once and renders entries',
       run: async () => {
         await evaluate(`window.zephyrlea.logs.open()`);
