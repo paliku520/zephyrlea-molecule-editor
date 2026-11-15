@@ -129,6 +129,39 @@ function buildConformerModel(
   viewer.render();
 }
 
+/**
+ * 3Dmol draws synchronously inside its own pointer and wheel handlers, so one
+ * drag queues several full WebGL passes per frame — enough to make a large
+ * model stutter. Route every `render()` through a single animation frame
+ * instead; the returned flusher paints any pending frame immediately (used
+ * before a screenshot, which reads the canvas back).
+ */
+function coalesceRenders(viewer: GLViewer): () => void {
+  const rawRender = viewer.render.bind(viewer);
+  let frame = 0;
+
+  viewer.render = (callback?: unknown, exts?: unknown) => {
+    // Callers that pass a callback want the pixels in that same tick.
+    if (callback) return rawRender(callback, exts);
+
+    if (!frame) {
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        rawRender();
+      });
+    }
+    return viewer;
+  };
+
+  return () => {
+    if (frame) {
+      window.cancelAnimationFrame(frame);
+      frame = 0;
+    }
+    rawRender();
+  };
+}
+
 const VIEWER_BACKGROUND: Record<ThemeMode, string> = {
   dark: '#171717',
   light: '#ffffff',
@@ -193,6 +226,8 @@ export function Viewer3DModal({
 
   /** Pointer state of the "move camera" overlay; `null` when not dragging. */
   const panRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  /** Paints any render queued by `coalesceRenders`; `null` before the viewer exists. */
+  const flushRenderRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -303,6 +338,9 @@ export function Viewer3DModal({
     if (!viewer) return;
 
     try {
+      // The canvas may still have a queued frame; paint it before reading back.
+      flushRenderRef.current?.();
+
       // 3Dmol keeps the drawing buffer, so the WebGL canvas can be read back.
       const dataUrl = viewer.pngURI?.();
       if (!dataUrl) throw new Error('3D 画面暂不可用');
@@ -341,6 +379,7 @@ export function Viewer3DModal({
     const disposeViewer = () => {
       const viewer = viewerRef.current;
       viewerRef.current = null;
+      flushRenderRef.current = null;
       shownVariantRef.current = null;
       if (!viewer) return;
 
@@ -368,6 +407,7 @@ export function Viewer3DModal({
         });
 
         viewerRef.current = viewer;
+        flushRenderRef.current = coalesceRenders(viewer);
         buildConformerModel(
           viewer,
           result,

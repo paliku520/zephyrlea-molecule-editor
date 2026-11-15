@@ -37,6 +37,18 @@ interface ToastState {
 /** Height of the docked bottom chrome: element strip (52) + tool rail (53) + action bar (56). */
 const BOTTOM_CHROME_PX = 161;
 
+/**
+ * Quiet period before the structure is analysed again. Large drawings get a
+ * longer one: their molblocks take longer to analyse and their gestures emit
+ * far more change events, so a fixed 220 ms would keep the engine busy.
+ */
+function analysisDebounceMs(atomCount: number): number {
+  if (atomCount > 600) return 1200;
+  if (atomCount > 300) return 700;
+  if (atomCount > 120) return 400;
+  return 220;
+}
+
 function ToastIcon({ kind }: { kind: ToastState['kind'] }) {
   if (kind === 'success') {
     return <Check size={16} strokeWidth={2.2} className="mt-0.5 shrink-0 text-accent" />;
@@ -285,6 +297,9 @@ export function MoleculeEditor() {
     let cancelled = false;
     setValidationStatus('checking');
 
+    // Big drawings take longer to export and analyse, and they also fire far
+    // more change events per gesture, so the debounce grows with the atom count
+    // instead of hammering the backend on every edit.
     const timer = window.setTimeout(() => {
       const targets = bridge.collectValidationTargets();
 
@@ -311,7 +326,7 @@ export function MoleculeEditor() {
           setValidationError(error instanceof Error ? error.message : String(error));
           setValidationStatus('error');
         });
-    }, 220);
+    }, analysisDebounceMs(bridge.countAtoms()));
 
     return () => {
       cancelled = true;

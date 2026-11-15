@@ -87,6 +87,8 @@ export interface MoleculeEditorBridge {
   exportImage(format: MoleculeImageFormat): Promise<MoleculeImage | null>;
   /** Every molecule with a molblock whose atom order matches its Kekule nodes. */
   collectValidationTargets(): ValidationTarget[];
+  /** Cheap total node count, used to scale the debounce on big drawings. */
+  countAtoms(): number;
   /** Circle around one atom, in viewport pixels. */
   getAtomScreenRing(atom: any): AtomScreenRing | null;
   importSmiles(smiles: string): Promise<boolean>;
@@ -1293,7 +1295,6 @@ export function createEditorBridge(
         if (atoms.length === 0) continue;
 
         let molfile = '';
-        let smiles = '';
 
         try {
           molfile = K.IO.saveFormatData(molecule, 'mol') ?? '';
@@ -1301,10 +1302,18 @@ export function createEditorBridge(
           console.warn('[Validation] Molfile export failed', error);
         }
 
-        try {
-          smiles = K.IO.saveFormatData(molecule, 'smi') ?? '';
-        } catch (error) {
-          console.warn('[Validation] SMILES export failed', error);
+        // SMILES is a fallback only: Kekule's SMILES writer is quadratic and
+        // costs ~1.6 s for a 300-atom structure, while the molblock export of
+        // the same molecule takes a few milliseconds. RDKit reads the bond
+        // orders, charges and atom order straight from the molblock, so the
+        // analysis result is the same without it.
+        let smiles = '';
+        if (!molfile) {
+          try {
+            smiles = K.IO.saveFormatData(molecule, 'smi') ?? '';
+          } catch (error) {
+            console.warn('[Validation] SMILES export failed', error);
+          }
         }
 
         if (!molfile && !smiles) continue;
@@ -1317,6 +1326,13 @@ export function createEditorBridge(
       }
 
       return targets;
+    },
+    countAtoms() {
+      let total = 0;
+      for (const molecule of getMolecules(K, composer)) {
+        total += molecule.getNodeCount?.() ?? 0;
+      }
+      return total;
     },
     getAtomScreenRing(atom) {
       try {

@@ -98,7 +98,8 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 卡片折叠状态由面板本身持有（按结构序号），重新编辑结构、甚至把整块面板收起成窄条再展开，卡片都保持原来的折叠状态；画布清空后这份记录随之重置。
 - 面板高度被钳制在画布行内（`min-h-0` 链 + 面板内部滚动），结构再多也只在面板里滚动，不会把底部的元素条 / 工具栏 / 操作栏挤出窗口。
 - 问题原子的定位使用同一结构的 **molblock**（`Kekule.IO.saveFormatData(mol, 'mol')`）：Kekule 写出的 molblock 原子顺序与画布节点顺序一致，RDKit 报错里的原子序号可以直接映射到画布节点；而 SMILES 是按遍历顺序写出的，序号与节点顺序不同，无法用来定位。
-- 校验在编辑事件的下一帧之后再防抖 220ms 触发；`editorBridge` 的 `onContentChange` 会带上递增的 `revision`，React 侧据此决定是否重跑分析。
+- 校验在编辑事件的下一帧之后再防抖触发；`editorBridge` 的 `onContentChange` 会带上递增的 `revision`，React 侧据此决定是否重跑分析。防抖时长随结构规模放大：≤120 原子 220ms、≤300 原子 400ms、≤600 原子 700ms、更大 1200ms，避免大结构在连续编辑时反复排队。
+- 导出给分析用的结构只走 `K.IO.saveFormatData(molecule, 'mol')`。Kekule 的 SMILES 写入器是二次复杂度（300 原子实测 1.6s），而同一分子的 molblock 只要几毫秒，RDKit 又能直接从 molblock 拿到键级、电荷与原子顺序，结果完全一致；只有在 molblock 导出失败时才退回 SMILES。
 - 红圈是一层 `pointer-events-none` 的 SVG 覆盖层，逐帧读取 `editor.objCoordToScreen()`，因此缩放、平移、整理、拖动原子时都会跟随；圆圈半径按相邻键长的一半缩放。
 - 前端不再打包任何分析引擎：连不上本地服务时 `prepareAnalysisEngine()` 抛 `LocalEngineUnavailableError`，分析面板改为「本地计算服务不可用 / 未连接本地计算引擎，请确保软件已正确安装运行」并提供重新加载按钮。
 
@@ -160,6 +161,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 底部工具栏把模型样式、氢原子开关、大 π 键开关、拖拽方式、重置视图、最大化放在同一个药丸形容器里（`pointer-events-none` 的外层负责定位，内层恢复交互），对齐方式由 `settings.viewer3DToolbarAlign` 决定：`justify-start` / `justify-center` / `justify-end`，默认居中。提示文字因此移到画布左上角，避免与靠左的工具栏重叠。
 - **拖拽方式**是两个互斥的图标按钮：`旋转结构`（默认，直接使用 3Dmol 的拖拽旋转）与 `移动摄像头`。后者在画布上盖一层透明层接管指针事件（避免 3Dmol 同时旋转），拖动时调用 `viewer.translate(dx, -dy)` —— 它移动的是相机 `lookingAt`，结构本身不动，所以看起来是「绕着结构平移视角」。3Dmol 的 `translate` 以画布中心为原点、y 轴朝上，因此纵向要取反，拖动方向才与手势一致。
 - 滚轮缩放在两种拖拽方式下统一由容器上的原生 `wheel` 监听（捕获阶段 + `stopPropagation`，避免与 3Dmol 自带的滚轮缩放叠加）处理，并且**以鼠标位置为锚点**：先 `viewer.zoom(factor)`，再按 `-(factor-1)·指针偏移` 平移相机，使指针下的原子保持在指针下，因此缩放既能放大也能缩小，而且作用在注视的位置而不是只朝画布中心缩放。
+- **渲染按帧合并**：3Dmol 在它自己的拖拽 / 滚轮处理器里同步 `render()`，一次拖动会在一帧内排队好几次完整绘制。`coalesceRenders()` 把实例上的 `render` 换成「本帧只登记一次，下一帧统一绘制」，所以转动、缩放、切样式、切氢原子 / 大 π 键都不会迸发多次 GPU 绘制；`pngURI()` 读回画布前会先 `flush`（见 `flushRenderRef`），截图不会拿到旧帧。实测 24 原子模型 100 次连续 pointermove：从 76ms（含一次 78ms 长任务）降到 47ms 且无长任务。
 - 重置视图不是 3Dmol 自带的 API：它把 `setView()` 的平移归零、旋转四元数设为单位四元数（`[0,0,0,z,0,0,0,1]`），再把相机 `lookingAt` 指回原点（`setView()` 不会撤销「移动摄像头」造成的相机偏移），最后按当前样式重新 `zoomTo()`，所以「重置」后的画面与刚打开弹窗时完全一致。
 - 最大化只是切换弹窗容器尺寸（`h-full w-full max-w-none` + 外层内边距 `p-2`），canvas 由 `ResizeObserver` 触发 `viewer.resize()` 重排，模型不被重建；`Esc` 在最大化时只还原窗口，再按一次才关闭。
 - 3Dmol（约 570 KB）通过动态 `import('3dmol')` 懒加载，不进首屏包。它本身是 webpack 的 UMD 产物，导入时对 `default` 与命名空间两种互操作形态都做了兼容。
