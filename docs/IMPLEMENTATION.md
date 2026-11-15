@@ -53,6 +53,7 @@ src/components/Viewer3DToolbar.tsx  3D 窗口底部工具栏（模型样式 + �
 src/components/ui/IconRadioGroup.tsx  图标单选组与边框容器（两处 3D 设置共用）
 src/components/Viewer3DModal.tsx  3D 视图弹窗（3Dmol.js 球棍 / 空间填充 / 棍状 / 线框渲染）
 src/components/AnalysisPanel.tsx  右侧「分子分析」面板（可折叠卡片 + 结构校验）
+src/components/SelectionToolbar.tsx  选区操作栏（固定钉在画布顶部中央，不跟随选区移动）
 src/components/ValidationOverlay.tsx  画布上标记问题原子的红圈层
 src/lib/moleculeLayout.ts   无坐标结构的纯 JS 兜底布局算法
 src/lib/moleculeExport.ts   画板导出：测量墨水包围盒、Kekule → SVG、再栅格化为 2× 透明 PNG

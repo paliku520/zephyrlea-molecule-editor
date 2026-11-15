@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { FlipHorizontal2, FlipVertical2, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import type { MoleculeEditorBridge, SelectionSnapshot } from '../lib/editorBridge';
 
@@ -7,47 +7,14 @@ const ROTATE_STEP = Math.PI / 12;
 interface SelectionToolbarProps {
   bridge: MoleculeEditorBridge | null;
   selection: SelectionSnapshot | null;
-  /** Bottom chrome (docked toolbars) the floating bar must stay above. */
-  bottomInset?: number;
 }
 
-export function SelectionToolbar({ bridge, selection, bottomInset = 0 }: SelectionToolbarProps) {
-  const barRef = useRef<HTMLDivElement>(null);
-  const insetRef = useRef(bottomInset);
-  insetRef.current = bottomInset;
-
-  useEffect(() => {
-    if (!bridge || !selection) return;
-
-    let frame = 0;
-    const place = () => {
-      const bar = barRef.current;
-      const snapshot = bridge.readSelection();
-
-      if (bar && snapshot) {
-        const width = bar.offsetWidth;
-        const height = bar.offsetHeight;
-        const { left, top, width: boxWidth, height: boxHeight } = snapshot.box;
-        const maxTop = window.innerHeight - insetRef.current - height - 12;
-
-        const maxLeft = Math.max(window.innerWidth - width - 12, 12);
-        const nextLeft = Math.min(Math.max(left + boxWidth / 2 - width / 2, 12), maxLeft);
-
-        const above = top - height - 12;
-        const nextTop = above >= 12 ? above : Math.min(top + boxHeight + 12, maxTop);
-
-        bar.style.left = `${nextLeft}px`;
-        bar.style.top = `${Math.max(Math.min(nextTop, maxTop), 12)}px`;
-        bar.style.visibility = 'visible';
-      }
-
-      frame = window.requestAnimationFrame(place);
-    };
-
-    frame = window.requestAnimationFrame(place);
-    return () => window.cancelAnimationFrame(frame);
-  }, [bridge, selection]);
-
+/**
+ * Selection actions, docked at a fixed spot on top of the canvas. The bar
+ * deliberately does not follow the selection box: it stays put while the user
+ * pans, zooms or drags the structure, so the buttons never jump away mid-drag.
+ */
+export function SelectionToolbar({ bridge, selection }: SelectionToolbarProps) {
   if (!selection) return null;
 
   const label =
@@ -60,11 +27,9 @@ export function SelectionToolbar({ bridge, selection, bottomInset = 0 }: Selecti
 
   return (
     <div
-      ref={barRef}
       role="toolbar"
       aria-label="选中结构操作"
-      style={{ visibility: 'hidden' }}
-      className="fixed left-0 top-0 z-40 flex items-center gap-0.5 rounded-xl border border-line-strong bg-raised/95 px-1.5 py-1 shadow-[0_14px_40px_var(--shell-shadow)] backdrop-blur-md"
+      className="pointer-events-auto absolute left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-line-strong bg-raised/95 px-1.5 py-1 shadow-[0_14px_40px_var(--shell-shadow)] backdrop-blur-md"
     >
       <span className="max-w-[132px] truncate px-1.5 text-[11.5px] font-medium text-ink-muted">
         {label}

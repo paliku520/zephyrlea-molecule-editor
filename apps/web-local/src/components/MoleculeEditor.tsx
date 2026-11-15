@@ -643,11 +643,7 @@ export function MoleculeEditor() {
               <div ref={hostRef} className="kekule-host absolute inset-0" />
 
               {ready && (
-                <SelectionToolbar
-                  bridge={bridgeRef.current}
-                  selection={selection}
-                  bottomInset={bottomDocked ? BOTTOM_CHROME_PX : 0}
-                />
+                <SelectionToolbar bridge={bridgeRef.current} selection={selection} />
               )}
 
               {ready && <ValidationOverlay bridge={bridgeRef.current} marks={validationMarks} />}

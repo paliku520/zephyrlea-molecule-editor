@@ -67,14 +67,12 @@ export interface AtomScreenRing {
   radius: number;
 }
 
-/** Selection state used by the floating transform bar. */
+/** Selection state shown by the docked selection bar. */
 export interface SelectionSnapshot {
   /** Total number of selected objects (atoms + bonds). */
   count: number;
   atomCount: number;
   bondCount: number;
-  /** Selection bounds in viewport pixels. */
-  box: { left: number; top: number; width: number; height: number };
   /** False when the selection holds fewer than two atoms and cannot be transformed. */
   transformable: boolean;
 }
@@ -104,7 +102,6 @@ export interface MoleculeEditorBridge {
   resetZoom(): void;
   loadFile(file: File): Promise<boolean>;
   handleResize(): void;
-  readSelection(): SelectionSnapshot | null;
   rotateSelection(angle: number): boolean;
   mirrorSelection(axis: 'horizontal' | 'vertical'): boolean;
   deleteSelection(): boolean;
@@ -1048,22 +1045,10 @@ function createSelectionSnapshot(editor: any): SelectionSnapshot | null {
   const selection: any[] = editor.getSelection?.() ?? [];
   if (selection.length === 0) return null;
 
-  const box = editor.getSelectionContainerBox?.();
-  const host = editor.getEditClientElem?.();
-  if (!box || !host) return null;
-
-  const rect = host.getBoundingClientRect();
-
   return {
     count: selection.length,
     atomCount: selection.filter(isAtomObject).length,
     bondCount: selection.filter(isBondObject).length,
-    box: {
-      left: rect.left + box.x1,
-      top: rect.top + box.y1,
-      width: Math.max(box.x2 - box.x1, 0),
-      height: Math.max(box.y2 - box.y1, 0),
-    },
     transformable: collectSelectionAtoms(selection).length >= 2,
   };
 }
@@ -1469,9 +1454,6 @@ export function createEditorBridge(
       // board right away and once more after deferred change events settle.
       persistence?.save();
       persistence?.scheduleSave();
-    },
-    readSelection() {
-      return createSelectionSnapshot(editor);
     },
     rotateSelection(angle) {
       if (!Number.isFinite(angle) || angle === 0) return false;
