@@ -1,5 +1,6 @@
+import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron';
 import type {
   BrowserWindowConstructorOptions,
@@ -43,6 +44,20 @@ interface RendererLogReport {
   level?: unknown;
   message?: unknown;
 }
+
+/**
+ * 绿色版在 exe 同级带一个 data/ 目录：用户数据（localStorage、缓存）跟着文件夹走，
+ * 拷到别处即完整迁移，删掉即彻底卸载。安装版没有这个目录，仍用系统的用户数据目录。
+ * 必须在 app ready 之前设置。
+ */
+function applyPortableDataDir(): void {
+  if (!app.isPackaged) return;
+  const portableDir = join(dirname(process.execPath), 'data');
+  if (!existsSync(portableDir)) return;
+  app.setPath('userData', portableDir);
+}
+
+applyPortableDataDir();
 
 function windowOptions(): BrowserWindowConstructorOptions {
   return {

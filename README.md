@@ -15,7 +15,7 @@
 | `apps/web-local/` | React + Vite 前端，同时是桌面版的渲染层；化学计算全部走本地后端 |
 | `apps/desktop/` | Electron 外壳，负责窗口、IPC 与原生另存 |
 | `apps/backend/` | Python（FastAPI + 原生 RDKit）本地计算服务，化学计算全在这里 |
-| `scripts/` | 版本号同步与纯静态版构建脚本 |
+| `scripts/` | 版本号同步、纯静态版与绿色版打包脚本 |
 
 > 前端不再内置任何 WebAssembly 计算引擎：分子分析、2D 坐标与 3D 构象都向本地后端请求。没有后端的纯静态页面会提示「未连接本地计算引擎，请确保软件已正确安装运行」。
 
@@ -62,6 +62,30 @@ python scripts/bump_version.py 0.2.0      # 指定版本
 python scripts/bump_version.py --bump patch   # 0.1.0 -> 0.1.1
 python scripts/bump_version.py --check    # 版本不一致时退出码 1
 ```
+
+### 绿色版（免安装便携包）
+
+一条命令产出 Windows 免安装包，产物都在 `dist-green/`：
+
+```bash
+npm run build:green                     # 构建界面 + 冻结后端 + 组装 + 打 zip
+npm run build:green -- --skip-backend   # 复用已有的 dist-green/zephyrlea-backend.exe
+npm run build:green -- --no-zip         # 只留文件夹，不压缩成 zip
+```
+
+| 产物 | 说明 |
+| --- | --- |
+| `Zephyrlea-Molecule-Editor-<版本>-win-x64/` | 解压即用：Electron 运行时 + `resources/app`（界面）+ `resources/backend`（后端） |
+| `zephyrlea-backend.exe` | 单文件后端（PyInstaller 冻结，约 59 MB），可单独替换 / 更新 |
+| `Zephyrlea-Molecule-Editor-<版本>-win-x64.zip` | 上面文件夹的压缩包（约 155 MB） |
+
+- **不打包 Python 环境**：后端只以 PyInstaller 冻结出的单个 exe 出现，主进程按 `process.resourcesPath/backend/zephyrlea-backend.exe` 拉起它。单文件后端每次启动要先解压自己，首次分析会多等几秒（实测就绪约 6 s，主进程留了 60 s 超时）。
+- 打包脚本会在需要时自动把 `pyinstaller`（`apps/backend/requirements-build.txt`，仅打包用）装进 `apps/backend/.venv`；跑之前需要 `npm install` 和上一节准备好的 Python 环境。
+- 便携文件夹里带着同级的 `data/` 目录：主进程检测到它就把用户数据（结构存档、设置、缓存）写进去，整个文件夹拷走即迁移、删掉即彻底卸载，不在 `%APPDATA%` 留东西。
+- 界面以未加壳的 `resources/app` 交付（`apps/desktop/out` 原样放进去），排查问题时可以直接改里面的文件再启动；`electron.exe` 改名为 `Zephyrlea Molecule Editor.exe`，语言包只保留 zh-CN / zh-TW / en-US。
+- **图标**只有一个来源 `apps/web-local/public/favicon.svg`：打包时 `scripts/build-icon.mjs` 用 Electron 自带的 Chromium 把它栅格化成 16/24/32/48/64/128/256 七帧的 `build/green/icon.ico`（svg 比 ico 新才重新生成），再分别写进主程序与后端 exe。后端那枚由 PyInstaller `--icon` 在冻结时就带上，`--skip-backend` 复用旧 exe 时会保留上次的图标。
+- 生成的是免安装目录 + zip，不含代码签名与安装器；包内自带 `使用说明.txt`。
+- `dist-green/` 与 `apps/backend/build/` 都已加入 `.gitignore`。
 
 ## 功能速览
 

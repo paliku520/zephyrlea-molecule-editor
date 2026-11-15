@@ -1,0 +1,3 @@
+# 仅在打包时使用：把本地计算服务冻结成单个 zephyrlea-backend.exe。
+# 不参与运行时依赖，`scripts/build-green.mjs` 发现缺失时会自动安装。
+pyinstaller>=6.11,<7

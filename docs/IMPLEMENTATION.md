@@ -116,9 +116,14 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 业务 IPC 五条：`chemistry:analyze`（→ `/analyze`）、`chemistry:layout2d`（→ `/api/layout2d`）、`chemistry:embed3d`（→ `/api/embed3d`，超时放宽到 120s）、`backend:health`（→ `/health`）、`file:save`（原生另存）。渲染层通过 preload 暴露的 `window.zephyrlea` 调用；没有该对象时只能用 `window.__zephyrleaBackendUrl` / `VITE_ZEPHYRLEA_BACKEND` 指定的 HTTP 地址，两者都没有就统一报「未连接本地计算引擎」。
 - 导出改为原生对话框：`saveExportedFile()` 在有桥时把 Blob 转成 `ArrayBuffer`、把 `data:` URL 解码成字节后经 `file:save` 交给主进程写盘，用户取消返回 `false`，界面不再提示「已导出」；浏览器版仍然走 `<a download>`。
 - `apps/desktop/src/main/self-test.ts` 提供 `electron . --self-test`（`npm run smoke:desktop`）：依次断言 preload 已注入、`/health` 经 IPC 连通、五价碳能返回 `AtomValenceException`、`layout2d` 返回 13 个原子的 V2000 molblock、`embed3d` 双结构返回 9 原子 / 2 片段且 z 方向有展开、非法结构给出中文提示、界面载入 `CCO` 后显示 `C2H6O` 并完成「整理结构」且**没有**请求 `RDKit_minimal.wasm` / `openchemlib` 代码块、3D 弹窗能用后端构象渲染出模型、页眉里有 3 个 `data-window-control` 按钮且 `window:toggle-maximize` 真的把窗口最大化了（随后还原），全过退出码 0，便于 CI 把关。
-- 打包路径已按「先 PyInstaller、再安装包」预留：`app.isPackaged` 时主进程从 `process.resourcesPath/backend/zephyrlea-backend.exe` 启动服务，开发期则用 `apps/backend/.venv/Scripts/python.exe`，也可用 `ZEPHYRLEA_PYTHON` 指定解释器。
+- 打包路径：`app.isPackaged` 时主进程从 `process.resourcesPath/backend/zephyrlea-backend.exe` 启动服务，开发期则用 `apps/backend/.venv/Scripts/python.exe`，也可用 `ZEPHYRLEA_PYTHON` 指定解释器。
+- 绿色版由 `scripts/build-green.mjs`（`npm run build:green`）一条命令产出：先 `npm run build:desktop` 出界面，再用 PyInstaller 把 `apps/backend/main.py` 冻结成单文件 `zephyrlea-backend.exe`（`--onefile --collect-all rdkit --collect-submodules uvicorn`，并显式声明 uvicorn 那几条动态 import 的 hidden-import），最后复制 `node_modules/electron/dist` 组装便携目录 + `tar -a -c -f` 打 zip。临时目录 `apps/backend/build/` 复制完 exe 就删掉。
+- 便携目录 = Electron 运行时（删掉 `resources/default_app.asar`、语言包只留 zh-CN / zh-TW / en-US、`electron.exe` 改名为 `Zephyrlea Molecule Editor.exe`）+ `resources/app`（界面产物与一份精简 package.json）+ `resources/backend`（后端 exe）+ 空的 `data/`。界面不加壳，`resources/app/out` 就是 `apps/desktop/out` 原样。
+- 便携包**不含 Python 环境**：后端只有单个 exe，代价是每次启动自解压到临时目录，实测从启动到 `/health` 就绪约 6 s（`START_TIMEOUT_MS` 的 60 s 足够）；`--skip-backend` 可复用上次的 exe，只重打界面。
+- 便携数据目录：`app.isPackaged` 且 exe 同级存在 `data/` 时，`applyPortableDataDir()` 在 app ready 之前把 `userData` 指过去，于是结构存档、设置与缓存都随文件夹走（实测跑完自检后 `%APPDATA%` 下没有任何目录），删掉文件夹即彻底卸载；安装版没有这个目录，行为不变。
+- 图标：`apps/web-local/public/favicon.svg` 是唯一来源，`scripts/build-icon.mjs` 在 Electron 主进程里把它画到各尺寸 canvas 上取回 PNG（data: URL 图片不会污染 canvas，因此不需要额外依赖），再按 ICO 规范拼成 7 帧 ico 写到 `build/green/icon.ico`；主程序那次「svg 比 ico 新才重建」的缓存判定让它不必每轮重跑。后端图标走 PyInstaller 的 `--icon`，主程序图标在组装完便携目录后用 `PyInstaller.utils.win32.icon.CopyIcons_FromIco()` 写 RT_GROUP_ICON/RT_ICON（复用冻结后端已经装好的 PyInstaller，不再引 rcedit）；`electron.exe` 只剩默认图标资源里的多余项，Windows 取 id 最小的图标组，因此显示的就是新图标。
 - Electron 固定 `31.7.7`：44 / 45 在这台 Windows 10 上启动即崩（`0xC0000005`），31.7.7 正常。electron-vite 需要在**仓库根**解析 `electron/package.json`（monorepo 下它按自身路径 `require.resolve`），所以 `electron` 声明在根 `package.json` 的 `devDependencies`，`allowScripts` 放行其 postinstall 以取得二进制。
-- 本轮迁移了「分子分析 / 结构校验 / 2D 坐标生成 / 3D 构象生成」四条链路，并删除了前端全部 WASM 引擎；C++ 扩展与 PyInstaller 打包仍待后续。
+- 本轮迁移了「分子分析 / 结构校验 / 2D 坐标生成 / 3D 构象生成」四条链路，并删除了前端全部 WASM 引擎；C++ 扩展仍待后续，PyInstaller 冻结与绿色版打包已由 `npm run build:green` 覆盖。
 
 ## 关于 2D 布局与 3D 构象
 
