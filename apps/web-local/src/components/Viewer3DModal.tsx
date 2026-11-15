@@ -10,6 +10,7 @@ import type { AtomStyleSpec, GLViewer } from '3dmol';
 import { computeConformer, type Conformer3D } from '../lib/conformer3d';
 import { exportFileName, saveExportedFile } from '../lib/download';
 import type {
+  Aromatic3DStyle,
   Model3DStyle,
   ThemeMode,
   Viewer3DDragMode,
@@ -29,6 +30,9 @@ interface Viewer3DModalProps {
   /** Draw the explicit hydrogens instead of the heavy-atom skeleton. */
   showHydrogens: boolean;
   onShowHydrogensChange: (show: boolean) => void;
+  /** Aromatic rings as large π bonds, or as Kekulé alternating double bonds. */
+  aromaticStyle: Aromatic3DStyle;
+  onAromaticStyleChange: (style: Aromatic3DStyle) => void;
   /** Surface a short confirmation (screenshot saved, failure) to the shell. */
   onNotice?: (notice: { kind: 'success' | 'error'; title: string; detail?: string }) => void;
   onClose: () => void;
@@ -93,21 +97,33 @@ function resetView(viewer: GLViewer, style: Model3DStyle) {
 }
 
 /**
- * Loads one variant of the conformer — heavy atoms only, or with every explicit
- * hydrogen — and frames it. Both molblocks come from the same embedding, so a
- * swap keeps the geometry and only adds / removes the hydrogens.
+ * The molblock matching the current hydrogen / aromatic switches. All variants
+ * come from the same embedding, so swapping them keeps the geometry and only
+ * changes how atoms and bonds are drawn.
  */
+function pickMolblock(
+  conformer: Conformer3D,
+  showHydrogens: boolean,
+  aromaticStyle: Aromatic3DStyle,
+): string {
+  if (showHydrogens) {
+    return aromaticStyle === 'aromatic'
+      ? conformer.molblockWithHydrogensAromatic
+      : conformer.molblockWithHydrogens;
+  }
+  return aromaticStyle === 'aromatic' ? conformer.molblockAromatic : conformer.molblock;
+}
+
+/** Loads the selected conformer variant and frames it. */
 function buildConformerModel(
   viewer: GLViewer,
   conformer: Conformer3D,
   showHydrogens: boolean,
+  aromaticStyle: Aromatic3DStyle,
   style: Model3DStyle,
 ) {
   viewer.removeAllModels();
-  viewer.addModel(
-    showHydrogens ? conformer.molblockWithHydrogens : conformer.molblock,
-    'sdf',
-  );
+  viewer.addModel(pickMolblock(conformer, showHydrogens, aromaticStyle), 'sdf');
   viewer.setStyle({}, MODEL_STYLE_SPECS[style]);
   fitView(viewer, style);
   viewer.render();
@@ -150,6 +166,8 @@ export function Viewer3DModal({
   toolbarAlign,
   showHydrogens,
   onShowHydrogensChange,
+  aromaticStyle,
+  onAromaticStyleChange,
   onNotice,
   onClose,
 }: Viewer3DModalProps) {
@@ -161,8 +179,10 @@ export function Viewer3DModal({
   modelStyleRef.current = modelStyle;
   const showHydrogensRef = useRef(showHydrogens);
   showHydrogensRef.current = showHydrogens;
-  /** Variant currently on screen; `null` before the first model is added. */
-  const shownHydrogensRef = useRef<boolean | null>(null);
+  const aromaticStyleRef = useRef(aromaticStyle);
+  aromaticStyleRef.current = aromaticStyle;
+  /** Hydrogen / aromatic switches the model on screen was built from. */
+  const shownVariantRef = useRef<string | null>(null);
 
   const [stage, setStage] = useState<Stage>('loading');
   const [conformer, setConformer] = useState<Conformer3D | null>(null);
@@ -321,7 +341,7 @@ export function Viewer3DModal({
     const disposeViewer = () => {
       const viewer = viewerRef.current;
       viewerRef.current = null;
-      shownHydrogensRef.current = null;
+      shownVariantRef.current = null;
       if (!viewer) return;
 
       try {
@@ -348,8 +368,14 @@ export function Viewer3DModal({
         });
 
         viewerRef.current = viewer;
-        buildConformerModel(viewer, result, showHydrogensRef.current, modelStyleRef.current);
-        shownHydrogensRef.current = showHydrogensRef.current;
+        buildConformerModel(
+          viewer,
+          result,
+          showHydrogensRef.current,
+          aromaticStyleRef.current,
+          modelStyleRef.current,
+        );
+        shownVariantRef.current = `${showHydrogensRef.current}|${aromaticStyleRef.current}`;
 
         setConformer(result);
         setStage('ready');
@@ -393,13 +419,21 @@ export function Viewer3DModal({
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer || !conformer || stage !== 'ready') return;
-    // The model is rebuilt only when the switch actually differs from what is
-    // on screen, so opening the dialog with hydrogens enabled does not reload.
-    if (shownHydrogensRef.current === showHydrogens) return;
+    // The model is rebuilt only when a switch actually differs from what is on
+    // screen, so opening the dialog with hydrogens / π bonds enabled does not
+    // reload the model a second time.
+    const variant = `${showHydrogens}|${aromaticStyle}`;
+    if (shownVariantRef.current === variant) return;
 
-    buildConformerModel(viewer, conformer, showHydrogens, modelStyleRef.current);
-    shownHydrogensRef.current = showHydrogens;
-  }, [showHydrogens, conformer, stage]);
+    buildConformerModel(
+      viewer,
+      conformer,
+      showHydrogens,
+      aromaticStyle,
+      modelStyleRef.current,
+    );
+    shownVariantRef.current = variant;
+  }, [showHydrogens, aromaticStyle, conformer, stage]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -532,6 +566,10 @@ export function Viewer3DModal({
               onDragModeChange={setDragMode}
               showHydrogens={showHydrogens}
               onToggleHydrogens={() => onShowHydrogensChange(!showHydrogens)}
+              aromaticStyle={aromaticStyle}
+              onToggleAromatic={() =>
+                onAromaticStyleChange(aromaticStyle === 'aromatic' ? 'kekule' : 'aromatic')
+              }
               onResetView={handleResetView}
               onScreenshot={handleScreenshot}
               maximized={maximized}

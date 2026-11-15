@@ -63,18 +63,22 @@ export interface StructureSource {
   molfile: string | null;
 }
 
-/** Reply of `/api/embed3d`: two molblocks plus the counts the viewer shows. */
+/** Reply of `/api/embed3d`: four molblocks plus the counts the viewer shows. */
 export interface Embed3DResult {
-  /** Heavy-atom conformer; what the viewer draws by default. */
+  /** Heavy-atom conformer in Kekulé form; alternating single / double bonds. */
   sdf: string;
+  /** Same heavy-atom conformer with aromatic bonds (order 4) kept aromatic. */
+  sdfAromatic: string;
   /** Same conformer with every explicit hydrogen kept (`AddHs` output). */
   sdfWithHydrogens: string;
+  /** Hydrogen-complete conformer with aromatic bonds kept aromatic. */
+  sdfWithHydrogensAromatic: string;
   atomCount: number;
   bondCount: number;
-  /** Counts of `sdfWithHydrogens`; shown when hydrogen display is switched on. */
+  /** Counts of the hydrogen-complete molblocks; shown when hydrogens are drawn. */
   atomCountWithHydrogens: number;
   bondCountWithHydrogens: number;
-  /** Explicit hydrogens the engine placed (difference between the two variants). */
+  /** Explicit hydrogens the engine placed. */
   hydrogenCount: number;
   fragmentCount: number;
   elapsedMs: number;

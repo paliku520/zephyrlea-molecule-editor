@@ -280,8 +280,8 @@ def _separate_fragments(mol: Chem.Mol) -> None:
         conformer.SetAtomPosition(index, Geometry.Point3D(position.x + shift, position.y, position.z))
 
 
-def _embed_3d(smiles: str, molfile: str | None) -> tuple[str, str, dict]:
-    """生成 3D 构象，返回 (重原子 molblock, 含氢 molblock, 统计信息)。"""
+def _embed_3d(smiles: str, molfile: str | None) -> dict:
+    """生成 3D 构象，返回各渲染变体的 molblock 与统计信息（字段即 `/api/embed3d` 的响应）。"""
     started = time.perf_counter()
 
     mol = _parse_for_layout(smiles, molfile)
@@ -307,13 +307,20 @@ def _embed_3d(smiles: str, molfile: str | None) -> tuple[str, str, dict]:
         )
 
     _optimize_with_force_field(mol)
-    # 片段排开先作用在含氢模型上，随后再删氢；两种输出因此共用同一套坐标，
-    # 界面切换「显示氢原子」时骨架不会跳动。
+    # 片段排开先作用在含氢模型上，随后再删氢；各版本因此共用同一套坐标，
+    # 界面切换「显示氢原子 / 大 π 键」时骨架不会跳动。
     _separate_fragments(mol)
     mol_with_hydrogens = mol
     # 重原子版本沿用原有输出（界面默认按重原子渲染）
     mol = Chem.RemoveHs(mol_with_hydrogens)
-    molblock_with_hydrogens = Chem.MolToMolBlock(mol_with_hydrogens)
+    # 芳香环另写一份「不凯库勒化」的 molblock：芳香键写成键级 4，3Dmol 才会把它
+    # 画成大 π 键（实线 + 虚线）；凯库勒式则保持单双键交替。
+    molblocks = {
+        "sdf": Chem.MolToMolBlock(mol),
+        "sdfAromatic": Chem.MolToMolBlock(mol, kekulize=False),
+        "sdfWithHydrogens": Chem.MolToMolBlock(mol_with_hydrogens),
+        "sdfWithHydrogensAromatic": Chem.MolToMolBlock(mol_with_hydrogens, kekulize=False),
+    }
 
     fragment_count = len(Chem.GetMolFrags(mol))
     stats = {
@@ -326,17 +333,15 @@ def _embed_3d(smiles: str, molfile: str | None) -> tuple[str, str, dict]:
         "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
     }
 
-    return Chem.MolToMolBlock(mol), molblock_with_hydrogens, stats
+    return {**molblocks, **stats}
 
 
 def generate_3d_sdf(smiles: str, molfile: str | None) -> str:
     """生成 3D 构象并以 MOL block（SDF 单分子，仅重原子）形式返回，失败抛 ChemError。"""
-    molblock, _, _ = _embed_3d(smiles, molfile)
-    return molblock
+    return _embed_3d(smiles, molfile)["sdf"]
 
 
 def embed_3d(smiles: str, molfile: str | None) -> dict:
     """3D 构象 + 渲染所需的计数，供 `/api/embed3d` 直接返回。"""
-    molblock, molblock_with_hydrogens, stats = _embed_3d(smiles, molfile)
-    return {"sdf": molblock, "sdfWithHydrogens": molblock_with_hydrogens, **stats}
+    return _embed_3d(smiles, molfile)
 

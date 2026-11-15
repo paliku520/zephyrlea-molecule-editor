@@ -178,6 +178,23 @@ export function SettingsModal({ open, settings, onChange, onClose }: SettingsMod
           <div className="mx-3 h-px bg-line" />
 
           <SettingRow
+            title="3D 大 π 键"
+            description="芳香环的显示方式。"
+            hint="开启后苯环等芳香环画成大 π 键（环内一条实线 + 一条虚线，默认），关闭后按凯库勒式画成单双键交替。3D 窗口底部工具栏里的 π 按钮可以随时切换。"
+            control={
+              <SwitchButton
+                label="3D 大 π 键"
+                checked={settings.aromatic3DStyle === 'aromatic'}
+                onChange={(aromatic) =>
+                  onChange({ ...settings, aromatic3DStyle: aromatic ? 'aromatic' : 'kekule' })
+                }
+              />
+            }
+          />
+
+          <div className="mx-3 h-px bg-line" />
+
+          <SettingRow
             title="隐藏碳/氢原子"
             description="骨架式绘制。"
             hint="开启后碳原子不标注、氢原子仅在需要时显示；关闭后显示全部原子与氢的数量。"

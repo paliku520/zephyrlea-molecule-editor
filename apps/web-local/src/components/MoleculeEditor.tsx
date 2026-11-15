@@ -785,6 +785,10 @@ export function MoleculeEditor() {
         onShowHydrogensChange={(show3DHydrogens) =>
           setSettings((current) => ({ ...current, show3DHydrogens }))
         }
+        aromaticStyle={settings.aromatic3DStyle}
+        onAromaticStyleChange={(aromatic3DStyle) =>
+          setSettings((current) => ({ ...current, aromatic3DStyle }))
+        }
         onNotice={showToast}
         onClose={() => setViewer3DOpen(false)}
       />

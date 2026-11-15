@@ -47,9 +47,9 @@ src/lib/version.ts          版本号唯一来源（页眉徽标、关于弹窗�
 src/lib/boardPersistence.ts 画板自动保存 / 恢复（结构 molblock、原子坐标、缩放与视口位置）
 src/lib/structureValidation.ts  分析 + 校验结果模型、价键错误归类与中文说明
 src/lib/conformer3d.ts      3D 构象（向本地后端请求，多结构已由后端排好；重原子与含氢两份 molblock 一次取回）
-src/components/SettingsModal.tsx  设置弹窗（主题切换、3D 模型样式、3D 显示氢原子、隐藏碳/氢原子）
+src/components/SettingsModal.tsx  设置弹窗（主题切换、3D 模型样式、3D 显示氢原子 / 大 π 键、隐藏碳/氢原子）
 src/components/Model3DSwitch.tsx  3D 模型样式选择器（图标按钮，设置弹窗用）
-src/components/Viewer3DToolbar.tsx  3D 窗口底部工具栏（模型样式 + 氢原子开关 + 拖拽方式 + 重置视图 + 最大化）
+src/components/Viewer3DToolbar.tsx  3D 窗口底部工具栏（模型样式 + 氢原子开关 + 大π键开关 + 拖拽方式 + 重置视图 + 最大化）
 src/components/ui/IconRadioGroup.tsx  图标单选组与边框容器（两处 3D 设置共用）
 src/components/Viewer3DModal.tsx  3D 视图弹窗（3Dmol.js 球棍 / 空间填充 / 棍状 / 线框渲染）
 src/components/AnalysisPanel.tsx  右侧「分子分析」面板（可折叠卡片 + 结构校验）
@@ -125,7 +125,7 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 - 2D 回填：`editorBridge.relayout()` 与 `importSmiles()` 只请求本地 molblock；`applyCleanedLayout()` 先按「旧平均键长 / 新平均键长」求出缩放因子并把后端坐标整体缩放到用户原来画的键长，再用两侧包围盒中心之差把新坐标平移回原重心，最后逐个原子写回 Kekule 节点——因此整理只规整键长键角，结构的视觉大小与位置都不变；原子数量或元素顺序对不上时视为失败，退回纯 JS 的 `layoutMolecule()`（同样缩放到原键长并归位到原中心，整理结构按钮不会因此失效）。画布表面因新坐标越界（越过左 / 上边界）而扩张时，`editorBoard.fitSurfaceToContent()` 会同步平移视口，整块画面不会「跳」一下。
 - 3D：`chem.embed_3d()` 解析 → 清坐标 → `AddHs()` → `EmbedMolecule(randomSeed=42)`；失败时用 `useRandomCoords=True, maxAttempts=50` 再试一次 → `MMFFOptimizeMolecule(maxIters=500)`（缺 MMFF 参数时退回 UFF，两者都没有参数就直接用嵌入坐标）→ 多片段沿 x 轴排开（间距 4 Å、整体居中）→ 先 `MolToMolBlock()` 存下**含氢**版本，再 `RemoveHs()` 出**重原子**版本。片段排开放**删氢之前**做，两份 molblock 因此共用同一套坐标，界面切换「显示氢原子」时骨架不会跳动。
 - 嵌入失败（`EmbedMolecule` 返回 -1，例如 `C1CC2CC3CC4CC5CC1C2C3C45` 这类高张力笼状结构）不会让服务崩溃：`chem.ChemError` 携带 `code` + 中文说明，接口返回 422 `{"error": {"code", "message"}}`，主进程解析出 `error.message` 抛给渲染层，`chemistryBackend` 再剥掉 Electron 的 `Error invoking remote method '…'` 前缀，3D 弹窗直接显示这句话。
-- 接口：`POST /api/layout2d` → `{"molfile": "…"}`（解析失败返回 422）；`POST /api/embed3d` → `{"sdf": "…", "sdfWithHydrogens": "…", "atomCount", "bondCount", "atomCountWithHydrogens", "bondCountWithHydrogens", "hydrogenCount", "fragmentCount", "elapsedMs"}`。`sdf` 仍是重原子版本（与「显示氢原子」关闭时一致），`sdfWithHydrogens` 是 `AddHs` 后的同一构象；两套计数随开关切换，直接用于 3D 窗口标题，省一次解析。
+- 接口：`POST /api/layout2d` → `{"molfile": "…"}`（解析失败返回 422）；`POST /api/embed3d` → `{"sdf", "sdfAromatic", "sdfWithHydrogens", "sdfWithHydrogensAromatic", "atomCount", "bondCount", "atomCountWithHydrogens", "bondCountWithHydrogens", "hydrogenCount", "fragmentCount", "elapsedMs"}`。四份 molblock 是同一个构象的四种写法：`sdf` 重原子 + 凯库勒式（单双键交替，原来的输出），`sdfAromatic` 重原子 + 芳香键写成键级 4，带 `WithHydrogens` 的两份是 `AddHs` 之后的版本。两套计数随「显示氢原子」切换，直接用于 3D 窗口标题，省一次解析。
 - 浏览器直连本地服务调试时，在页面里设置 `window.__zephyrleaBackendUrl = 'http://127.0.0.1:8765'`（或构建期 `VITE_ZEPHYRLEA_BACKEND`），探测到 `/health` 可用后缓存结果；后端因此加了只放行 `localhost` / `127.0.0.1` 来源的 CORS 规则。Electron 走 IPC，不需要这条规则。
 - 移除前后构建体积（`apps/desktop/out/renderer`，本机实测）：27.72 MB → 3.66 MB，其中 `sci_form_wasm_bg*.wasm`（12.6 MB）、`RDKit_minimal.wasm`（7.2 MB）与 `openchemlib` 代码块（1.37 MB）全部消失。
 
@@ -151,11 +151,12 @@ src/index.css               Tailwind 入口 + Kekule 暗色外壳样式覆盖
 
 ## 关于 3D 视图
 
-- 3D 构象由 `POST /api/embed3d` 返回的 **V2000 molblock** 直接交给 `viewer.addModel(molblock, 'sdf')`。只用 XYZ 的话格式里没有键信息，3Dmol 只能按距离猜键、并全部画成单键；molblock 带上了键级，3Dmol 就会自己把双键 / 三键画成两条 / 三条平行圆柱，芳香键则画成「实线 + 环内虚线」的大 π 键（`aromaticStyle: 'dashed'`，即默认样式）。多结构的画布由后端拆开、逐个嵌入再沿 x 轴排开，渲染层只负责画一个已经合并好的模型。
-- **氢原子开关**：构象引擎始终带着显式氢做嵌入与力场优化，后端一次返回含氢与不含氢两份 molblock（见上）。底部工具栏的 `H` 按钮（以及设置里的「3D 显示氢原子」）只决定画哪一份：`buildConformerModel()` 用 `removeAllModels()` + `addModel()` 现场换模型，**不重新请求后端、也不重新嵌入**，所以连着点不会有网络等待；换完按当前样式重新 `zoomTo()` 适配（多出来的氢球不会出画），当前旋转角度保持不变。标题栏计数跟着切换（例如 `9 个原子 · 8 根键（含 6 个氢）`），没有氢的结构不会追加这段说明。默认**打开**（打开弹窗时直接连氢一起画）；开关存在 `settings.show3DHydrogens`，两处 UI 改的是同一份设置。
+- 3D 构象由 `POST /api/embed3d` 返回的 **V2000 molblock** 直接交给 `viewer.addModel(molblock, 'sdf')`。只用 XYZ 的话格式里没有键信息，3Dmol 只能按距离猜键、并全部画成单键；molblock 带上了键级，3Dmol 就会自己把双键 / 三键画成两条 / 三条平行圆柱。多结构的画布由后端拆开、逐个嵌入再沿 x 轴排开，渲染层只负责画一个已经合并好的模型。
+- **芳香环（大 π 键）**：RDKit 默认会凯库勒化，写出的 molblock 里苯环是单双键交替，3Dmol 只会照着画三条双键。所以后端额外用 `MolToMolBlock(mol, kekulize=False)` 导出一份芳香键写成**键级 4** 的 molblock；3Dmol 读到 4 会走芳香分支（`renderBondOrder = 1.5`，`aromaticStyle: 'dashed'` 为默认），把它画成「一条实线 + 一条环内虚线」的大 π 键。默认就是这一份；工具栏的 `π` 按钮（`settings.aromatic3DStyle`）切回凯库勒式时换用另一份 molblock，同样只换模型、不重新请求。
+- **氢原子开关**：构象引擎始终带着显式氢做嵌入与力场优化，后端一次返回含氢 / 不含氢、芳香 / 凯库勒共四份 molblock（见上）。底部工具栏的 `H` 按钮（以及设置里的「3D 显示氢原子」）只决定画哪一份：`buildConformerModel()` 用 `removeAllModels()` + `addModel()` 现场换模型，**不重新请求后端、也不重新嵌入**，所以连着点不会有网络等待；换完按当前样式重新 `zoomTo()` 适配（多出来的氢球不会出画），当前旋转角度保持不变。标题栏计数跟着切换（例如 `9 个原子 · 8 根键（含 6 个氢）`），没有氢的结构不会追加这段说明。默认**打开**（打开弹窗时直接连氢一起画）；开关存在 `settings.show3DHydrogens`，两处 UI 改的是同一份设置。
 - 渲染样式由 `MODEL_STYLE_SPECS` 决定，分四种：**球棍**（`stick` + `sphere: { scale: 0.3 }`，默认）、**空间填充**（仅 `sphere: { scale: 1 }`，按范德华半径铺满）、**棍状**（仅 `stick`）、**线框**（半径 0.05 的细棍）。球棍与棍状用的是半径 0.15 的细棍（3Dmol 默认 0.25），单键更轻；同时把多重键比例提高到 `doubleBondScaling: 0.55` / `tripleBondScaling: 0.45`，细棍下双键 / 三键仍清晰可辨。线框没有用 3Dmol 的 `line` 样式，是因为 WebGL 的 `lineWidth` 在主流浏览器上被限制为 1px，在暗色背景上几乎看不见。
 - 切换样式只调用 `viewer.setStyle()` 再重新适配视图，不会重建模型，所以当前旋转角度保持不变；重新适配（`zoomTo()` + 空间填充时额外拉远 25%）是为了让更大的球体仍留在画面内。样式存在 `settings.model3DStyle`（`localStorage`），设置弹窗与 3D 窗口底部工具栏共用同一份 `Model3DSwitch` 选项定义，两处改动互相同步。
-- 底部工具栏把模型样式、氢原子开关、拖拽方式、重置视图、最大化放在同一个药丸形容器里（`pointer-events-none` 的外层负责定位，内层恢复交互），对齐方式由 `settings.viewer3DToolbarAlign` 决定：`justify-start` / `justify-center` / `justify-end`，默认居中。提示文字因此移到画布左上角，避免与靠左的工具栏重叠。
+- 底部工具栏把模型样式、氢原子开关、大 π 键开关、拖拽方式、重置视图、最大化放在同一个药丸形容器里（`pointer-events-none` 的外层负责定位，内层恢复交互），对齐方式由 `settings.viewer3DToolbarAlign` 决定：`justify-start` / `justify-center` / `justify-end`，默认居中。提示文字因此移到画布左上角，避免与靠左的工具栏重叠。
 - **拖拽方式**是两个互斥的图标按钮：`旋转结构`（默认，直接使用 3Dmol 的拖拽旋转）与 `移动摄像头`。后者在画布上盖一层透明层接管指针事件（避免 3Dmol 同时旋转），拖动时调用 `viewer.translate(dx, -dy)` —— 它移动的是相机 `lookingAt`，结构本身不动，所以看起来是「绕着结构平移视角」。3Dmol 的 `translate` 以画布中心为原点、y 轴朝上，因此纵向要取反，拖动方向才与手势一致。
 - 滚轮缩放在两种拖拽方式下统一由容器上的原生 `wheel` 监听（捕获阶段 + `stopPropagation`，避免与 3Dmol 自带的滚轮缩放叠加）处理，并且**以鼠标位置为锚点**：先 `viewer.zoom(factor)`，再按 `-(factor-1)·指针偏移` 平移相机，使指针下的原子保持在指针下，因此缩放既能放大也能缩小，而且作用在注视的位置而不是只朝画布中心缩放。
 - 重置视图不是 3Dmol 自带的 API：它把 `setView()` 的平移归零、旋转四元数设为单位四元数（`[0,0,0,z,0,0,0,1]`），再把相机 `lookingAt` 指回原点（`setView()` 不会撤销「移动摄像头」造成的相机偏移），最后按当前样式重新 `zoomTo()`，所以「重置」后的画面与刚打开弹窗时完全一致。

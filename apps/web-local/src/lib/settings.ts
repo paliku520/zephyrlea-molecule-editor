@@ -3,6 +3,8 @@ export type ThemeMode = 'dark' | 'light';
 export type ToolbarPlacement = 'top' | 'bottom';
 /** How the 3D viewer draws the conformer. */
 export type Model3DStyle = 'ball-stick' | 'space-fill' | 'stick' | 'wireframe';
+/** How the 3D viewer draws aromatic rings. */
+export type Aromatic3DStyle = 'aromatic' | 'kekule';
 /** Where the 3D viewer's bottom toolbar sits. */
 export type Viewer3DToolbarAlign = 'left' | 'center' | 'right';
 /** What a drag inside the 3D canvas does. */
@@ -47,6 +49,8 @@ export interface AppSettings {
   viewer3DToolbarAlign: Viewer3DToolbarAlign;
   /** Draw the explicit hydrogens the 3D engine placed instead of heavy atoms only. */
   show3DHydrogens: boolean;
+  /** Large π bonds inside aromatic rings, or the Kekulé alternating double bonds. */
+  aromatic3DStyle: Aromatic3DStyle;
 }
 
 export const SETTINGS_STORAGE_KEY = 'zephyrlea.settings';
@@ -58,6 +62,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   model3DStyle: 'ball-stick',
   viewer3DToolbarAlign: 'center',
   show3DHydrogens: true,
+  aromatic3DStyle: 'aromatic',
 };
 
 const THEME_BACKGROUND: Record<ThemeMode, string> = {
@@ -90,6 +95,10 @@ export function normalizeSettings(value: unknown): AppSettings {
       typeof raw.show3DHydrogens === 'boolean'
         ? raw.show3DHydrogens
         : DEFAULT_SETTINGS.show3DHydrogens,
+    aromatic3DStyle:
+      raw.aromatic3DStyle === 'kekule' || raw.aromatic3DStyle === 'aromatic'
+        ? raw.aromatic3DStyle
+        : DEFAULT_SETTINGS.aromatic3DStyle,
   };
 }
 
